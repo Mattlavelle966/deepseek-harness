@@ -72,6 +72,8 @@ export class TuiModel {
   binding: SessionBinding | undefined
   /** Shared conversation projection for the current Session. */
   conversation: ConversationBinding | undefined
+  /** Monotonic invalidation key for the selected Chat projection's live node readers. */
+  chatRevision = 0
   /** Host-backed delivery preference used while the Agent is running. */
   busyEnter: BusyEnterBehavior = DEFAULT_BUSY_ENTER_BEHAVIOR
   private preferenceRead = 0
@@ -205,6 +207,7 @@ export class TuiModel {
       this.binding = binding
       this.conversation = this.ctx.uiConversation.binding(binding)
       this.conversation.activate('chat')
+      this.chatRevision++
       this.subscription = binding.session.subscribe(() => {
         this.notify()
       })
@@ -212,6 +215,7 @@ export class TuiModel {
         this.notify()
       })
       this.conversationSubscription = this.conversation.snapshot.subscribe(() => {
+        this.chatRevision++
         this.notify()
       })
       this.notify()

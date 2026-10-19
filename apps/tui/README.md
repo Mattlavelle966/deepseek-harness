@@ -20,7 +20,7 @@ For a source checkout, run `pnpm run build:artifacts` before `pnpm dsh tui --url
 
 ## Navigation
 
-The interface starts in Normal mode. The left sidebar contains registered Workspaces and their non-archived Sessions; ungrouped Sessions are omitted. Workspaces start collapsed and remember their expansion state for this TUI process. With the sidebar focused, Up/Down select visible rows, Left/Right collapse or expand, and Enter toggles a Workspace or opens a Session. Clicking a Workspace toggles it, while clicking a Session opens it.
+The interface starts in Normal mode with the left sidebar focused, so the arrow keys work immediately. The sidebar contains registered Workspaces and their non-archived Sessions; ungrouped Sessions are omitted. Workspaces start collapsed and remember their expansion state for this TUI process. Up/Down select visible rows, Left/Right collapse or expand, and Enter toggles a Workspace or opens a Session. Clicking a Workspace toggles it, while clicking a Session opens it.
 
 `i` or `a` enters the built-in multiline editor; Escape returns to Normal mode. Arrow keys and `hjkl` navigate, `w/b` move by word, `0/$` select line edges, `gg/G` select the beginning/end, and Ctrl-u/Ctrl-d scroll. The editor supports undo/redo, `v` selection, yank/delete, and paste. Bracketed paste remains literal and cannot submit a prompt or run a command.
 
@@ -28,7 +28,7 @@ Tab and Shift-Tab cycle focus. Ctrl-w followed by `h/j/k/l` changes panes. Space
 
 Pressing `n`, or running bare `:new`, opens a searchable Workspace picker and creates the Session in the selected Workspace. `:new <host directory>` remains available for an explicit path-based Session. Enter follows the Host-backed busy-state delivery preference; Alt-Enter uses its complement. Ctrl-j inserts a newline. Slash-prefixed prompts invoke harness commands. Drafts and attachment selections are per-session and local to this frontend. Mouse support includes focus, lists, scrolling, pane sizing, and transcript selection; `:copy` sends selected text through the terminal clipboard protocol. Terminal clipboard support depends on the terminal and tmux configuration.
 
-The transcript defaults to clean output: user and assistant text, compact tool status, readable tool results, and concise failures. Reasoning, lifecycle records, token accounting, and structural JSON are hidden. Press `r` in Normal mode or run `:raw` to switch between clean and raw diagnostic output for this TUI process.
+The transcript defaults to clean output: user and assistant text, collapsed tool calls, and concise failures. File contents and other tool results stay hidden until their tool-call row is clicked. Reasoning, lifecycle records, token accounting, and structural JSON are hidden. Press `r` in Normal mode or run `:raw` to switch between clean and raw diagnostic output for this TUI process.
 
 ## Workflows
 

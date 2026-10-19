@@ -9,6 +9,14 @@ import { pretty } from './model.ts'
 /** Transcript detail selected by the terminal user. */
 export type TranscriptMode = 'clean' | 'raw'
 
+/** Screen rows plus the source-row locations of collapsible tool calls. */
+export interface TranscriptPresentation {
+  readonly rows: string[]
+  readonly toolRows: ReadonlyMap<number, string>
+}
+
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+
 type TranscriptSnapshot = {
   readonly order: ChatSnapshot['order']
   readonly nodes: {
@@ -30,7 +38,7 @@ export function wrapText(text: string, width: number): string[] {
   for (const line of safeText(text).split('\n')) {
     let current = ''
     let cells = 0
-    for (const { segment } of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(line)) {
+    for (const { segment } of graphemeSegmenter.segment(line)) {
       const size = stringWidth(segment)
       if (cells + size > width && current) {
         lines.push(current)
@@ -99,8 +107,24 @@ export function transcript(
   renderers: ReadonlyMap<string, (data: unknown) => readonly string[]>,
   mode: TranscriptMode = 'clean',
 ): string[] {
-  if (!snapshot) return []
+  return presentTranscript(snapshot, renderers, mode, true).rows
+}
+
+/** Build interactive display rows while keeping tool output collapsed by default.
+ * @param snapshot - selected shared Chat target.
+ * @param renderers - registered extension renderers.
+ * @param mode - readable conversation output or complete diagnostic data.
+ * @param expandedTools - keys of tool calls expanded on screen, or true to expand every tool call.
+ * @returns display rows and the row-to-tool mapping used for pointer interaction. */
+export function presentTranscript(
+  snapshot: TranscriptSnapshot | undefined,
+  renderers: ReadonlyMap<string, (data: unknown) => readonly string[]>,
+  mode: TranscriptMode = 'clean',
+  expandedTools: ReadonlySet<string> | true = new Set(),
+): TranscriptPresentation {
+  if (!snapshot) return { rows: [], toolRows: new Map() }
   const rows: string[] = []
+  const collapsibleRows = new Map<number, string>()
   for (const key of snapshot.order) {
     const node = snapshot.nodes.get(key)
     if (!node || node.visibility === 'hidden') continue
@@ -113,13 +137,17 @@ export function transcript(
       rows.push(`── ${node.kind} ──`, ...describe(node.data).split('\n'), '')
       continue
     }
-    const clean = cleanNode(node.kind, node.data)
-    if (clean !== undefined) rows.push(...clean, '')
+    const expanded = expandedTools === true || expandedTools.has(key)
+    const clean = cleanNode(node.kind, node.data, expanded, expandedTools !== true)
+    if (clean !== undefined) {
+      if (node.kind === 'tool-call') collapsibleRows.set(rows.length, key)
+      rows.push(...clean, '')
+    }
   }
-  return rows.map(safeText)
+  return { rows: rows.map(safeText), toolRows: collapsibleRows }
 }
 
-function cleanNode(kind: string, data: unknown): string[] | undefined {
+function cleanNode(kind: string, data: unknown, expanded: boolean, interactive: boolean): string[] | undefined {
   switch (kind) {
     case 'user':
     case 'steering':
@@ -127,7 +155,7 @@ function cleanNode(kind: string, data: unknown): string[] | undefined {
     case 'assistant-step':
       return headed(t('assistant'), assistantText(data))
     case 'tool-call':
-      return toolRows(data)
+      return toolRows(data, expanded, interactive)
     case 'turn-error':
       return headed(t('errorLabel'), compactMessage(data, t('turnFailed')))
     case 'turn-max-tokens':
@@ -186,27 +214,35 @@ function compactMessage(value: unknown, fallback: string): string[] {
   return [fallback]
 }
 
-function toolRows(value: unknown): string[] | undefined {
-  if (!record(value) || !record(value.root)) return headed(t('tool'), [t('toolActivity')])
-  return toolBlockRows(value.root, 0)
+function toolRows(value: unknown, expanded: boolean, interactive: boolean): string[] | undefined {
+  const disclosure = interactive ? `${expanded ? '▾' : '▸'} ` : ''
+  if (!record(value) || !record(value.root)) return [`── ${disclosure}${t('tool')} · ${t('running')} ──`]
+  return toolBlockRows(value.root, 0, expanded, interactive)
 }
 
-function toolBlockRows(value: Record<string, unknown>, depth: number): string[] {
+function toolBlockRows(
+  value: Record<string, unknown>,
+  depth: number,
+  expanded: boolean,
+  interactive: boolean,
+): string[] {
   const name = typeof value.name === 'string' && value.name !== '' ? value.name : t('tool')
   const settled = value.kind === 'tool-result'
   const status = settled ? (value.isError === true ? t('failed') : t('done')) : t('running')
   const indent = '  '.repeat(depth)
-  const rows = [`${indent}── ${name} · ${status} ──`]
-  if (settled && Array.isArray(value.content)) {
+  const disclosure = interactive ? `${expanded ? '▾' : '▸'} ` : ''
+  const rows = [`${indent}── ${disclosure}${name} · ${status} ──`]
+  if (expanded && settled && Array.isArray(value.content)) {
     const output = value.content.flatMap(cleanText).flatMap(line => line.split('\n'))
     while (output.at(-1)?.trim() === '') output.pop()
     rows.push(...output.map(line => `${indent}${line}`))
   }
-  if (settled && value.isError === true && rows.length === 1) {
+  if (expanded && settled && value.isError === true && rows.length === 1) {
     rows.push(`${indent}${compactMessage(value.error, t('toolFailed'))[0]}`)
   }
-  if (Array.isArray(value.subCalls)) {
-    for (const child of value.subCalls) if (record(child)) rows.push(...toolBlockRows(child, depth + 1))
+  if (expanded && Array.isArray(value.subCalls)) {
+    for (const child of value.subCalls)
+      if (record(child)) rows.push(...toolBlockRows(child, depth + 1, true, interactive))
   }
   return rows
 }

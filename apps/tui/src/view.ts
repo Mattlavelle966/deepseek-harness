@@ -15,7 +15,7 @@ import { PasteDecoder } from './paste.ts'
 import { DraftEditor } from './editor.ts'
 import { TuiModel, pretty, type TuiAction, type Interaction } from './model.ts'
 import { sidebarRows, workspaceForSession, type SidebarRow } from './navigation.ts'
-import { record, safeText, transcript, wrapText, type TranscriptMode } from './presenter.ts'
+import { presentTranscript, record, safeText, transcript, wrapText, type TranscriptMode } from './presenter.ts'
 
 interface MenuItem {
   label: string
@@ -44,6 +44,17 @@ interface Form {
   run(values: Record<string, unknown>): void | Promise<void>
 }
 type Focus = 'sessions' | 'chat' | 'composer' | 'detail'
+type TranscriptRenderer = (data: unknown) => readonly string[]
+interface TranscriptCache {
+  snapshot: ReturnType<TuiModel['chat']>
+  chatRevision: number
+  rendererEntries: ReadonlyArray<readonly [string, TranscriptRenderer]>
+  width: number
+  mode: TranscriptMode
+  expansionRevision: number
+  rows: string[]
+  toolRows: Map<number, string>
+}
 
 /** Frontend layout, local drafts, and terminal emulation; owns no backend processes. */
 export class TuiView {
@@ -55,7 +66,7 @@ export class TuiView {
   private readonly answerDraft = new DraftEditor()
   private readonly input = new DraftEditor()
   private mode: 'NORMAL' | 'INSERT' | 'TERMINAL' = 'NORMAL'
-  private focus: Focus = 'composer'
+  private focus: Focus = 'sessions'
   private scroll = 0
   private detailScroll = 0
   private detailRows: string[] = []
@@ -91,6 +102,11 @@ export class TuiView {
   private selectedText = ''
   private selectionStart: number | undefined
   private contentRows: string[] = []
+  private toolContentRows = new Map<number, string>()
+  private readonly expandedTools = new Set<string>()
+  private toolExpansionRevision = 0
+  private pendingToolAnchor: { key: string; viewportRow: number } | undefined
+  private transcriptCache: TranscriptCache | undefined
   private search = ''
 
   constructor(
@@ -226,12 +242,23 @@ export class TuiView {
       }
       for (let y = 1; y < height - 1; y++) this.line(this.sideWidth - 1, y, '│', 1, 'gray')
     }
-    const rows =
-      this.focus === 'detail' && !detailWidth
-        ? this.model.result.split('\n')
-        : transcript(this.model.chat(), this.model.renderers, this.transcriptMode)
-    if (rows.length === 0) rows.push(t('selectASessionOrPressNTo'), '', t('iWriteActionsSpaceSpacePaletteHelp'))
-    this.contentRows = rows.flatMap(row => wrapText(row, contentWidth))
+    if (this.focus === 'detail' && !detailWidth) {
+      this.contentRows = this.model.result.split('\n').flatMap(row => wrapText(row, contentWidth))
+      this.toolContentRows = new Map()
+    } else {
+      const conversation = this.conversationRows(contentWidth)
+      this.contentRows = conversation.rows
+      this.toolContentRows = conversation.toolRows
+      const toolAnchor = this.pendingToolAnchor
+      if (toolAnchor !== undefined) {
+        const header = [...conversation.toolRows].find(([, key]) => key === toolAnchor.key)?.[0]
+        if (header !== undefined) {
+          const desiredStart = Math.max(0, header - toolAnchor.viewportRow)
+          this.scroll = Math.max(0, conversation.rows.length - this.chatHeight - desiredStart)
+        }
+        this.pendingToolAnchor = undefined
+      }
+    }
     const start =
       this.focus === 'detail' && !detailWidth
         ? this.detailScroll
@@ -309,6 +336,43 @@ export class TuiView {
       { x, y, attr: { color, bgColor }, wrap: false, dx: 1, dy: 0 },
       termkit.truncateString(safeText(text), Math.max(0, width)),
     )
+  }
+
+  private conversationRows(width: number): Pick<TranscriptCache, 'rows' | 'toolRows'> {
+    const snapshot = this.model.chat()
+    const rendererEntries = [...this.model.renderers.entries()]
+    const cached = this.transcriptCache
+    if (
+      cached !== undefined &&
+      cached.snapshot === snapshot &&
+      cached.chatRevision === this.model.chatRevision &&
+      cached.width === width &&
+      cached.mode === this.transcriptMode &&
+      cached.expansionRevision === this.toolExpansionRevision &&
+      sameRendererEntries(cached.rendererEntries, rendererEntries)
+    ) return cached
+
+    const presentation = presentTranscript(snapshot, this.model.renderers, this.transcriptMode, this.expandedTools)
+    const rows: string[] = []
+    const toolRows = new Map<number, string>()
+    presentation.rows.forEach((row, sourceRow) => {
+      const tool = presentation.toolRows.get(sourceRow)
+      if (tool !== undefined) toolRows.set(rows.length, tool)
+      rows.push(...wrapText(row, width))
+    })
+    if (rows.length === 0) rows.push(t('selectASessionOrPressNTo'), '', t('iWriteActionsSpaceSpacePaletteHelp'))
+    const next: TranscriptCache = {
+      snapshot,
+      chatRevision: this.model.chatRevision,
+      rendererEntries,
+      width,
+      mode: this.transcriptMode,
+      expansionRevision: this.toolExpansionRevision,
+      rows,
+      toolRows,
+    }
+    this.transcriptCache = next
+    return next
   }
 
   private box(title: string, width: number, height: number): void {
@@ -699,7 +763,15 @@ export class TuiView {
         this.mode = 'INSERT'
       } else {
         this.focus = 'chat'
-        this.selectionStart = Math.max(0, this.contentRows.length - this.chatHeight - this.scroll) + data.y - 3
+        const contentRow = Math.max(0, this.contentRows.length - this.chatHeight - this.scroll) + data.y - 3
+        const tool = this.toolContentRows.get(contentRow)
+        if (tool !== undefined) {
+          this.pendingToolAnchor = { key: tool, viewportRow: Math.max(0, data.y - 3) }
+          this.toggleTool(tool)
+          this.invalidate()
+          return
+        }
+        this.selectionStart = contentRow
       }
     } else if (name === 'MOUSE_DRAG') {
       if (this.dragging) this.sidebarWidth = Math.max(18, Math.min(50, data.x))
@@ -796,10 +868,18 @@ export class TuiView {
     this.scroll = 0
   }
 
+  private toggleTool(key: string): void {
+    if (this.expandedTools.has(key)) this.expandedTools.delete(key)
+    else this.expandedTools.add(key)
+    this.toolExpansionRevision++
+  }
+
   private async select(id: SessionId): Promise<void> {
     this.persistDraft()
     this.detachTerminal()
     await this.model.select(id)
+    this.expandedTools.clear()
+    this.toolExpansionRevision++
     this.draft.reset(this.model.drafts.get(id) ?? '')
     this.scroll = 0
   }
@@ -1479,6 +1559,15 @@ export class TuiView {
 
 function humanize(text: string): string {
   return text.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[-_]/g, ' ')
+}
+function sameRendererEntries(
+  left: ReadonlyArray<readonly [string, TranscriptRenderer]>,
+  right: ReadonlyArray<readonly [string, TranscriptRenderer]>,
+): boolean {
+  return left.length === right.length && left.every((entry, index) => {
+    const other = right.at(index)
+    return other !== undefined && entry[0] === other[0] && entry[1] === other[1]
+  })
 }
 function terminalKey(key: string): string {
   const keys: Record<string, string> = {

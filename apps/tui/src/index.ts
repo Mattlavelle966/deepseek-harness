@@ -32,7 +32,7 @@ export interface Config {
 export const Config: z<Config> = z.object({
   escapeDelayMs: z.natural().min(1).default(25),
   maxStreamCharacters: z.natural().min(1024).default(200000),
-  frameMs: z.natural().min(1).default(33),
+  frameMs: z.natural().min(1).default(16),
   connectTimeoutMs: z.natural().min(1).default(15000),
   mouse: z.boolean().default(true),
 })

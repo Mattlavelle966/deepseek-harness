@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { transcript } from '../src/presenter.ts'
+import { presentTranscript, transcript } from '../src/presenter.ts'
 
 function snapshot() {
   const values = new Map<string, { kind: string; visibility: 'visible'; data: unknown }>([
@@ -35,7 +35,7 @@ function snapshot() {
 }
 
 describe('terminal transcript modes', () => {
-  it('defaults to readable messages and compact tool results', () => {
+  it('exports readable messages and compact tool results', () => {
     const output = transcript(snapshot(), new Map()).join('\n')
     expect(output).toContain('── You ──\nHello')
     expect(output).toContain('── Assistant ──\nI will check.')
@@ -43,6 +43,17 @@ describe('terminal transcript modes', () => {
     expect(output).not.toContain('private reasoning')
     expect(output).not.toContain('argsRaw')
     expect(output).not.toContain('totalTokens')
+  })
+
+  it('collapses tool output on screen until the tool call is expanded', () => {
+    const collapsed = presentTranscript(snapshot(), new Map())
+    const collapsedOutput = collapsed.rows.join('\n')
+    expect(collapsedOutput).toContain('── ▸ bash · done ──')
+    expect(collapsedOutput).not.toContain('/workspace')
+    expect(collapsed.toolRows.get(collapsed.rows.indexOf('── ▸ bash · done ──'))).toBe('tool')
+
+    const expandedOutput = presentTranscript(snapshot(), new Map(), 'clean', new Set(['tool'])).rows.join('\n')
+    expect(expandedOutput).toContain('── ▾ bash · done ──\n/workspace')
   })
 
   it('retains the existing structured diagnostic projection in raw mode', () => {

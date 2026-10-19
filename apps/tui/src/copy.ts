@@ -93,7 +93,7 @@ const en = {
   mouseReconnectQClosingTheTUILeaves: ':mouse :reconnect :q \u00b7 Closing the TUI leaves agents running.',
   formsUseGeneratedActionParametersComplexValues: 'Forms use generated action parameters. Complex values accept JSON.',
   mouseClickFocusSelectWheelScrollDrag:
-    'Mouse: click focus/select, wheel scroll, drag divider; chat drag selects text.',
+    'Mouse: click focus/select, click tool calls to expand, wheel scroll, drag divider; chat drag selects text.',
   copyCopiesSelectedChatTextUsingTerminal: ':copy copies selected chat text using terminal clipboard (OSC 52).',
   escClosesThisHelpBrowserOnlyVisual: 'Esc closes this help. Browser-only visual previews use explicit :open.',
   charactersSelectedCopy: '{0} characters selected \u00b7 :copy',
