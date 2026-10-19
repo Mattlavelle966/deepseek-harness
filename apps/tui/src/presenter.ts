@@ -16,6 +16,7 @@ export interface TranscriptPresentation {
 }
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+const reasoningPreviewLength = 20
 
 type TranscriptSnapshot = {
   readonly order: ChatSnapshot['order']
@@ -153,7 +154,7 @@ function cleanNode(kind: string, data: unknown, expanded: boolean, interactive: 
     case 'steering':
       return headed(t('you'), cleanText(data))
     case 'assistant-step':
-      return headed(t('assistant'), assistantText(data))
+      return assistantRows(data)
     case 'tool-call':
       return toolRows(data, expanded, interactive)
     case 'turn-error':
@@ -191,6 +192,29 @@ function assistantText(value: unknown): string[] {
     if (!record(block) || block.kind !== 'text' || typeof block.text !== 'string') return []
     return block.text
   })
+}
+
+function assistantRows(value: unknown): string[] | undefined {
+  const rows: string[] = []
+  const preview = runningReasoningPreview(value)
+  if (preview !== undefined) rows.push(`── ${t('thinking')} · ${preview} ──`)
+  const answer = headed(t('assistant'), assistantText(value))
+  if (answer !== undefined) rows.push(...answer)
+  return rows.length === 0 ? undefined : rows
+}
+
+function runningReasoningPreview(value: unknown): string | undefined {
+  if (!record(value) || value.status !== 'running' || !Array.isArray(value.blocks)) return undefined
+  for (let index = value.blocks.length - 1; index >= 0; index--) {
+    const block: unknown = value.blocks[index]
+    if (!record(block) || block.kind !== 'reasoning' || typeof block.text !== 'string') continue
+    const text = safeText(block.text).replaceAll('**', '').replace(/\s+/g, ' ').trim()
+    if (text === '') continue
+    const graphemes = [...graphemeSegmenter.segment(text)].map(item => item.segment)
+    const preview = graphemes.slice(-reasoningPreviewLength).join('')
+    return graphemes.length > reasoningPreviewLength ? `…${preview}` : preview
+  }
+  return undefined
 }
 
 function cleanText(value: unknown): string[] {

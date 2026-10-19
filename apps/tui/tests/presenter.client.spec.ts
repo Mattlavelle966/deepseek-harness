@@ -56,6 +56,26 @@ describe('terminal transcript modes', () => {
     expect(expandedOutput).toContain('── ▾ bash · done ──\n/workspace')
   })
 
+  it('shows the latest 20 graphemes while reasoning is streaming', () => {
+    const values = new Map([
+      ['assistant', {
+        kind: 'assistant-step',
+        visibility: 'visible' as const,
+        data: {
+          status: 'running',
+          blocks: [{ kind: 'reasoning', text: '**Checking** the workspace files carefully now' }],
+        },
+      }],
+    ])
+    const output = presentTranscript({
+      order: [...values.keys()],
+      nodes: { get: (key: string) => values.get(key) },
+    }, new Map()).rows.join('\n')
+
+    expect(output).toContain('── Thinking · … files carefully now ──')
+    expect(output).not.toContain('Checking')
+  })
+
   it('retains the existing structured diagnostic projection in raw mode', () => {
     const output = transcript(snapshot(), new Map(), 'raw').join('\n')
     expect(output).toContain('── turn-process ──')

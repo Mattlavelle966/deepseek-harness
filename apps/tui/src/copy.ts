@@ -48,6 +48,7 @@ const en = {
   selectSeveralLabelsSeparatedByCommasOr: '\nSelect several labels separated by commas, or enter a custom answer.',
   requestCancelled: 'Request cancelled',
   reasoning: '[reasoning]\n{0}',
+  thinking: 'Thinking',
   useAnHTTPHarnessURL: 'Use an HTTP harness URL.',
   useALocalhostHarnessURLOrAn: 'Use a localhost harness URL or an SSH port forward.',
   supplyTheLaunchTokenSeparatelyWithDSH: 'The TUI accepts only a local Harness URL.',
