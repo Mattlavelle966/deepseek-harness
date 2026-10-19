@@ -573,7 +573,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ConnectionSinks',
-    declaration: 'export interface ConnectionSinks {\n    onConnected?: (host: ConnectionHostInfo) => void;\n    onStateChange?: (state: ConnectionState) => void;\n    onReconnectRequested?: () => void;\n}',
+    declaration: 'export interface ConnectionSinks {\n    onDiagnostic?: (level: \'warn\' | \'error\', message: string, cause?: unknown) => void;\n    onConnected?: (host: ConnectionHostInfo) => void;\n    onStateChange?: (state: ConnectionState) => void;\n    onReconnectRequested?: () => void;\n}',
   },
   {
     name: 'ConnectionState',

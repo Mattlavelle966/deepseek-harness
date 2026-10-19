@@ -1,0 +1,60 @@
+{
+  "name": "@deepseek-ai/dsh-tui-frontend",
+  "version": "0.2.1-rc.2",
+  "description": "Keyboard and mouse terminal frontend for an existing harness",
+  "type": "module",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/*.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "dependencies": {
+    "@deepseek-ai/dsh-client-connection": "workspace:*",
+    "@deepseek-ai/dsh-api-gateway": "workspace:*",
+    "@deepseek-ai/dsh-api-remotes": "workspace:*",
+    "@deepseek-ai/dsh-api-session-controller": "workspace:*",
+    "@deepseek-ai/dsh-api-workspace-controller": "workspace:*",
+    "@deepseek-ai/dsh-api-terminal-controller": "workspace:*",
+    "@deepseek-ai/dsh-client-file-upload": "workspace:*",
+    "@deepseek-ai/dsh-typert-registry": "workspace:*",
+    "@deepseek-ai/dsh-typert-protocol": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-conversation": "workspace:*",
+    "@deepseek-ai/dsh-client-ui-chat": "workspace:*",
+    "@deepseek-ai/dsh-client-store": "workspace:*",
+    "@deepseek-ai/dsh-session": "workspace:*",
+    "@deepseek-ai/dsh-cmdline": "workspace:*",
+    "commander": "^15.0.0",
+    "terminal-kit": "^3.1.2",
+    "ws": "8.21.3",
+    "@xterm/headless": "^6.0.0",
+    "@deepseek-ai/schemastery": "workspace:~",
+    "strip-ansi": "^7.1.2",
+    "string-width": "^7.2.0",
+    "@deepseek-ai/dsh-user-questions": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~",
+    "@types/terminal-kit": "^2.5.7",
+    "@types/ws": "8.18.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "apps/tui"
+  }
+}

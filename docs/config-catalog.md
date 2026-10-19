@@ -4789,6 +4789,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 | `@deepseek-ai/dsh-session-title-llm` | — | [`packages/session/session-title-llm/src/index.ts`](../packages/session/session-title-llm/src/index.ts) |
 | `@deepseek-ai/dsh-ssh-helper-runtime` | — | [`packages/ssh/ssh-helper-runtime/src/index.ts`](../packages/ssh/ssh-helper-runtime/src/index.ts) |
 | `@deepseek-ai/dsh-timeout` | — | [`packages/util/timeout/src/index.ts`](../packages/util/timeout/src/index.ts) |
+| `@deepseek-ai/dsh-tui-app` | — | [`packages/bundle/tui-app/src/index.ts`](../packages/bundle/tui-app/src/index.ts) |
 | `@deepseek-ai/dsh-typert-generator` | — | [`packages/typert/generator/src/index.ts`](../packages/typert/generator/src/index.ts) |
 | `@deepseek-ai/dsh-typert-protocol` | — | [`packages/typert/protocol/src/index.ts`](../packages/typert/protocol/src/index.ts) |
 | `@deepseek-ai/dsh-typert-registry` | — | [`packages/typert/registry/src/index.ts`](../packages/typert/registry/src/index.ts) |

@@ -204,3 +204,5 @@ Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点，并且�
 无。
 
 </details>
+
+`./client/headless` ESM 导出向终端客户端提供现有会话定义和 Chat 目标构建器，不挂载浏览器组件。

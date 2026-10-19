@@ -105,7 +105,8 @@
     "@deepseek-ai/dsh-experimental-terminal-bundle": "workspace:*",
     "@deepseek-ai/dsh-experimental-session-search": "workspace:*",
     "@deepseek-ai/dsh-experimental-tool-worktree": "workspace:*",
-    "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*"
+    "@deepseek-ai/dsh-experimental-plugin-market-bundle": "workspace:*",
+    "@deepseek-ai/dsh-tui-app": "workspace:*"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-skill-badge": "workspace:*",

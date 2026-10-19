@@ -99,3 +99,5 @@ These limits apply to the transport operation itself.
 None.
 
 </details>
+
+The `./client` export selects a standalone ESM client in Node and retains the existing loader-factory artifact in browsers.

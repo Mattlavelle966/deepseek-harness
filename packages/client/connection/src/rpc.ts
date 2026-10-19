@@ -98,6 +98,10 @@ export type RpcMessage = ClientRequest | ServerResponse
 export interface ConnectionTrustRequest {
   /** Request headers supplied by either the Fetch or node:http representation. */
   readonly headers: Headers | Readonly<Record<string, string | readonly string[] | undefined>>
+  /** Accepted socket address when a Node HTTP carrier supplies it. */
+  readonly remoteAddress?: string | undefined
+  /** Socket object when the Node HTTP carrier supplies it directly. */
+  readonly socket?: { readonly remoteAddress?: string | undefined } | undefined
 }
 
 /** HTTP status returned before dispatch, or undefined when the request may proceed. */

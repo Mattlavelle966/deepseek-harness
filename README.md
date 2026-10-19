@@ -75,3 +75,7 @@ For agents, follow [AGENTS.md](AGENTS.md).
 [MIT](LICENSE)
 
 Third-party dependencies and their licenses are disclosed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Terminal frontend
+
+Run `dsh tui --url http://127.0.0.1:<port>` in a Linux tmux pane to attach to an existing Web harness. The Web and terminal frontends share the same backend. See the [TUI guide](apps/tui/README.md) for authentication and keyboard navigation.

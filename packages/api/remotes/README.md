@@ -90,3 +90,5 @@ None.
 </details>
 
 The Client assembly includes the account namespace for login commands and reconnectable account snapshots.
+
+The `./client` export selects a standalone ESM client in Node and retains the existing loader-factory artifact in browsers.

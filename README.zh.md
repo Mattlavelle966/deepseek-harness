@@ -94,3 +94,7 @@ pnpm dsh web
 [MIT](LICENSE)
 
 第三方依赖及其许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+
+## 终端前端
+
+在 Linux tmux 窗格中运行 `dsh tui --url http://127.0.0.1:<port>` 可连接现有 Web harness。Web 和终端前端共享同一后端。身份验证和键盘导航见 [TUI 指南](apps/tui/README.zh.md)。

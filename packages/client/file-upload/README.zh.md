@@ -99,3 +99,5 @@ Host 插件提供 `ctx.fileUploads`。它拥有经过认证的流式路由、编
 无。
 
 </details>
+
+`./client` 导出在 Node 中选择独立 ESM 客户端，在浏览器中保留现有的加载器工厂产物。

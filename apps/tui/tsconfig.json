@@ -1,0 +1,67 @@
+{
+  "extends": "../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "types": [
+      "node",
+      "client-build-environment"
+    ]
+  },
+  "include": [
+    "src"
+  ],
+  "references": [
+    {
+      "path": "../../vendor/cordis"
+    },
+    {
+      "path": "../../packages/boot/cmdline"
+    },
+    {
+      "path": "../../packages/client/connection/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/api/gateway/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/api/workspace-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/api/terminal-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/client/file-upload/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/typert/registry"
+    },
+    {
+      "path": "../../packages/typert/protocol"
+    },
+    {
+      "path": "../../packages/client/ui-conversation/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/client/ui-chat/tsconfig.client.json"
+    },
+    {
+      "path": "../../packages/client/store"
+    },
+    {
+      "path": "../../packages/core/session"
+    },
+    {
+      "path": "../../vendor/schemastery"
+    },
+    {
+      "path": "../../packages/interaction/user-questions"
+    }
+  ]
+}

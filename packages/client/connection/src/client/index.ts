@@ -126,6 +126,8 @@ export interface ConnectionLocation {
 
 /** Instance-local inputs for installing a Connection service. */
 export interface ConnectionInstallOptions {
+  /** Shell-owned diagnostic presentation, so full-screen clients need not write over their display. */
+  readonly onDiagnostic?: NonNullable<ConnectionSinks['onDiagnostic']>
   /** Forwarded-event participation; omission selects answer for a page and none otherwise. */
   readonly interactions?: ConnectionInteractions
   /** Explicit physical carrier; omit for the browser HTTP + WebSocket carrier. */
@@ -304,6 +306,7 @@ export function installConnection(ctx: Context, options: ConnectionInstallOption
       const ownsGeneration = (): boolean => owner?.token === token
       const controller = new ConnectionController(source, {
         ...sinks,
+        ...options.onDiagnostic === undefined ? {} : { onDiagnostic: options.onDiagnostic },
         onConnected: (host) => {
           const nextGeneration = { id: ++generationId, host }
           publishGeneration(nextGeneration)

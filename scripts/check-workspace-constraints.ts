@@ -72,6 +72,7 @@ const desktopApplicationDirectory = 'apps/desktop'
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh': ['lib/*.js', 'lib/types/*.d.ts'],
+  '@deepseek-ai/dsh-tui-frontend': ['lib/*.js', 'lib/types/**/*.d.ts'],
   '@deepseek-ai/dsh-desktop-host': [
     'lib/index.js', 'lib/cli.js',
   ],
@@ -292,6 +293,7 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
     ...browserClient === './lib/client.js' ? ['lib/client.js'] : [],
     ...browserClient === './lib/client.browser.js' ? ['lib/client.browser.js'] : [],
     ...exportCondition(manifest, './client', 'node') === './lib/client.node.js' ? ['lib/client.node.js'] : [],
+    ...exportDefault(manifest, './client/headless') === './lib/client/headless.js' ? ['lib/client/headless.js'] : [],
     // runtime's shell-held loader subpath ships as its own bundle beside the client half.
     ...exportDefault(manifest, './loader') === './lib/loader.js' ? ['lib/loader.js'] : [],
     // A store subpath ships its own bundle (single-entry builds; no shared chunk).

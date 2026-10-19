@@ -124,7 +124,7 @@ export function clientBundle(
     const clientEntry = face === undefined ? 'src/client/index.ts' : 'lib/types/client/index.js'
     const client = clientConfig(manifest, clientEntry, options.clientBanner, options.dualClient === true)
     const node = [lib, ...(options.companions ?? [])]
-    const clientFaces = options.dualClient === true
+    const clientFaces = options.dualClient === true || options.nodeClient === true
       ? [nodeClientConfig(manifest, clientEntry), client]
       : [client]
     if (face === 'host') return options.hostPhase === true ? node : [SKIP_WORKSPACE_BUILD]
@@ -217,6 +217,8 @@ interface ClientBundleOptions {
   readonly hostPhase?: boolean
   /** Emit independent ESM `client.node.js` and browser-factory `client.browser.js` from the same Client entry. */
   readonly dualClient?: boolean
+  /** Emit an additive Node client while preserving the existing browser artifact name. */
+  readonly nodeClient?: boolean
   /** Additional Node-side configs emitted alongside the package library. */
   readonly companions?: readonly UserConfig[]
   /** Overrides for the package's primary Node-side library config. */

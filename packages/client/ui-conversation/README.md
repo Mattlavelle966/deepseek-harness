@@ -192,3 +192,5 @@ None; Conversation assembly and browser input state do not alter provider-side p
 None.
 
 </details>
+
+The `./client/headless` ESM export exposes the existing conversation assembly and registries for terminal clients without mounting browser components.

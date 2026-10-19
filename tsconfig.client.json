@@ -14,6 +14,7 @@
     "types": ["node"]
   },
   "include": [
+    "apps/tui/tests/**/*.client.spec.ts",
     // The native/renderer keyboard fixture imports only these Cordis-free Desktop modules.
     "apps/desktop/tests/keyboard.spec.ts",
     "apps/desktop/src/keyboard.ts",
@@ -53,6 +54,7 @@
     "packages/client/*/tests/**/*.host.ts"
   ],
   "references": [
+    { "path": "./apps/tui" },
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.client.json" },
     { "path": "./packages/client/product-analytics/tsconfig.client.json" },
     { "path": "./apps/desktop/tsconfig.client.json" },

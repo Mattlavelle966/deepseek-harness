@@ -28,6 +28,7 @@
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
+      "node": "./lib/client.node.js",
       "default": "./lib/client.js"
     },
     "./typert": {
@@ -62,6 +63,7 @@
     "locale/*.json",
     "lib/index.js",
     "lib/client.js",
+    "lib/client.node.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",

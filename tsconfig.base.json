@@ -28,6 +28,9 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-tui-frontend": ["./apps/tui/src/index.ts"],
+      "@deepseek-ai/dsh-client-ui-conversation/client/headless": ["./packages/client/ui-conversation/src/client/headless.ts"],
+      "@deepseek-ai/dsh-client-ui-chat/client/headless": ["./packages/client/ui-chat/src/client/headless.ts"],
       "@deepseek-ai/dsh-experimental-session-search": ["./packages/experimental/session-search/src/index.ts"],
       "@deepseek-ai/dsh-experimental-ralph-bundle": ["./packages/experimental/ralph-bundle/src/index.ts"],
       "@deepseek-ai/dsh-experimental-terminal-bundle": ["./packages/experimental/terminal-bundle/src/index.ts"],
@@ -540,6 +543,7 @@
       "@deepseek-ai/dsh-tool-working-directory": ["./packages/session/tool-working-directory/src"],
       "@deepseek-ai/dsh-tool-workspace-dependencies": ["./packages/skill/tool-workspace-dependencies/src"],
       "@deepseek-ai/dsh-tools": ["./packages/core/tools/src"],
+      "@deepseek-ai/dsh-tui-app": ["./packages/bundle/tui-app/src"],
       "@deepseek-ai/dsh-user-approval": ["./packages/interaction/user-approval/src"],
       "@deepseek-ai/dsh-user-questions": ["./packages/interaction/user-questions/src"],
       "@deepseek-ai/dsh-web": ["./packages/web/web/src"],

@@ -1,0 +1,40 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/bundle/tui-app/README.md
+/:
+  en: 729c6fe7406cdf6c
+  zh: 4f45809cdef4db8a
+/deepseek-ai-dsh-tui-app:
+  en: 3c0006df6d7b673e
+  zh: efafdb5569cd7473
+/deepseek-ai-dsh-tui-app/summary:
+  en: 4fdbaa14a78ce49a
+  zh: 881563c8e2fbb44f
+/deepseek-ai-dsh-tui-app/table-of-contents:
+  en: d4e9596852e22009
+  zh: 8a6bc778724bb498
+/deepseek-ai-dsh-tui-app/use-this-package:
+  en: 14a85ff0914aa839
+  zh: 69a3408d85cfaf30
+/deepseek-ai-dsh-tui-app/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tui-app/model-experience/actions-on-an-existing-instance:
+  en: a89249445f1e0862
+  zh: 2fc80b3802063f9b
+/deepseek-ai-dsh-tui-app/model-experience/actions-on-an-existing-instance/what-the-model-sees:
+  en: e6645eb0d150fee3
+  zh: b520006a8b4c4d8b
+/deepseek-ai-dsh-tui-app/model-experience/actions-on-an-existing-instance/token-effect:
+  en: 7f2c8dd9075716ca
+  zh: 2995ce5b1bd55bb9
+/deepseek-ai-dsh-tui-app/model-experience/actions-on-an-existing-instance/kv-cache-effect:
+  en: a58b8c441bed12f7
+  zh: d551f07f573f392e
+/deepseek-ai-dsh-tui-app/known-limitations-and-deferred-work:
+  en: 386eb1f2fa92abb5
+  zh: 8ebd68bde614464a
+/deepseek-ai-dsh-tui-app/known-limitations-and-deferred-work/dev-note:
+  en: bf8619dde8552254
+  zh: 2735b9b77d33f668

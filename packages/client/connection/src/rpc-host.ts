@@ -11,7 +11,8 @@ import {
 } from './rpc.ts'
 import { clientRequestSchema } from './rpc-schema.ts'
 import { bridge } from './http-bridge.ts'
-import { isRemoteAuthority, isTrustedApiRequest } from './api-request-trust.ts'
+import { isLoopbackAddress, isRemoteAuthority, isTrustedApiRequest } from './api-request-trust.ts'
+import { isLoopbackHostname } from './loopback-hostname.ts'
 import { API_PATH } from './api-path.ts'
 import type { BrowserAuth } from './browser-auth.ts'
 import { Peer } from './peer.ts'
@@ -174,7 +175,7 @@ export class HostConnectionService extends Service implements HostConnectionHand
 
   /**
    * Authenticate and publish a credential before sending the connect redirect.
-   * @param request - launch-token request on /connect.
+   * @param request - token-authenticated or local TUI request on /connect.
    * @param response - response owned to completion.
    */
   authorizeConnect(request: ConnectionIndexRequest, response: ConnectionIndexResponse): void {
@@ -183,8 +184,10 @@ export class HostConnectionService extends Service implements HostConnectionHand
       response.end(this.disposed ? 'unauthorized' : 'forbidden')
       return
     }
+    const carrier = this.owner.get('webServer')
     this.browserAuth.authorizeConnect(request, response,
-      this.owner.get('webServer')?.protocol === 'https:', interactions => this.publishPeer(interactions))
+      carrier?.protocol === 'https:', interactions => this.publishPeer(interactions),
+      isLocalTuiConnect(request, requestRemoteAddress(request), carrier?.host))
   }
 
   /**
@@ -299,6 +302,32 @@ export class HostConnectionService extends Service implements HostConnectionHand
       }
     }, `client-connection: ${channel} rpc interceptor`)
   }
+}
+
+function requestRemoteAddress(request: ConnectionTrustRequest): string | undefined {
+  return request.remoteAddress ?? request.socket?.remoteAddress
+}
+
+function isLocalTuiConnect(
+  request: ConnectionIndexRequest,
+  remoteAddress: string | undefined,
+  bindHost: string | undefined,
+): boolean {
+  if (!isLoopbackAddress(remoteAddress) || !isLoopbackAddress(bindHost) || request.method !== 'GET') return false
+  const url = new URL(request.url ?? '/', 'http://dsh.invalid')
+  const headers = request.headers
+  const host = headers instanceof Headers ? headers.get('host') : headers.host
+  const localClient = headers instanceof Headers ? headers.get('x-dsh-local-client') : headers['x-dsh-local-client']
+  if (typeof host !== 'string') return false
+  let hostname: string
+  try {
+    hostname = new URL(`http://${host}`).hostname
+  } catch {
+    return false
+  }
+  return url.pathname === '/connect' && url.searchParams.getAll('client').length === 1
+    && url.searchParams.get('client') === 'tui' && url.searchParams.getAll('token').length === 0
+    && isLoopbackHostname(hostname) && localClient === 'dsh-tui'
 }
 
 function rpcFetchHandler(

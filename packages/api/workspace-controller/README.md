@@ -72,3 +72,5 @@ No direct effect; Workspace mutations do not alter model requests.
 None.
 
 </details>
+
+The `./client` export selects a standalone ESM client in Node and retains the existing loader-factory artifact in browsers.

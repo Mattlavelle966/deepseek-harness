@@ -15,6 +15,7 @@ Run `pnpm run gen-cli-help` to regenerate; run `pnpm run verify-cli-help` to che
 - [`dsh headless`](#dsh-headless)
 - [`dsh sdk`](#dsh-sdk)
 - [`dsh sdk-minimal`](#dsh-sdk-minimal)
+- [`dsh tui`](#dsh-tui)
 - [`dsh web`](#dsh-web)
 
 <a id="dsh"></a>
@@ -159,6 +160,27 @@ Options:
 
 Example:
   dsh --profile sdk-minimal     serve one SDK runtime until its client disconnects
+
+```
+
+<a id="dsh-tui"></a>
+## `dsh tui`
+
+Invocations: `dsh tui --help`, `dsh --profile tui --help`
+
+```text
+Usage: dsh tui [options]
+
+Attach a keyboard and mouse terminal frontend to an existing DeepSeek Harness.
+Never starts a server.
+
+Options:
+  --url <url>     localhost harness URL (or DSH_TUI_URL)
+  --session <id>  select an existing shared session
+  --no-mouse      leave mouse events to tmux/terminal copy mode
+  -h, --help      display help for command
+
+The TUI attaches locally without a token. Start the Web harness separately. For SSH, forward its port and use the localhost URL.
 
 ```
 

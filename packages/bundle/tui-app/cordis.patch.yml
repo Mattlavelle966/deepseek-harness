@@ -1,0 +1,4 @@
+# An API client only: no base bundle, server, tools, or model runtime.
+- insert:
+    - id: tui
+      name: '@deepseek-ai/dsh-tui-frontend'

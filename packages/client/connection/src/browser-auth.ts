@@ -305,17 +305,19 @@ export class BrowserAuth {
   }
 
   /**
-   * Exchange the launch token for an independent API operator; omitted interactions default to none.
+   * Create an independent API operator from a launch token or verified local TUI request; omitted interactions default to none.
    * @param req - trusted GET request on /connect with at most one interactions declaration.
    * @param res - response owned to completion, redirecting to the API mux on success.
    * @param secure - whether the receiving listener serves TLS.
    * @param publish - synchronously create the operator before exposing its signed credential.
+   * @param allowLocalTui - whether Connection verified this as a loopback TUI request.
    */
   authorizeConnect(
     req: ConnectionIndexRequest,
     res: ConnectionIndexResponse,
     secure: boolean,
     publish: (interactions: ConnectionInteractions) => PeerId,
+    allowLocalTui = false,
   ): void {
     const url = new URL(req.url ?? '/', 'http://dsh.invalid')
     const declarations = url.searchParams.getAll('interactions')
@@ -327,8 +329,10 @@ export class BrowserAuth {
     }
     const tokens = url.searchParams.getAll(TOKEN_QUERY)
     const authority = requestAudience(req.headers, secure)
-    if (req.method !== 'GET' || url.pathname !== CONNECT_PATH || tokens.length !== 1
-      || authority === undefined || !tokenMatches(tokens.join(''), this.launchToken)) {
+    const tokenAllowed = tokens.length === 1 && tokenMatches(tokens[0]!, this.launchToken)
+    const localTuiAllowed = allowLocalTui && tokens.length === 0
+    if (req.method !== 'GET' || url.pathname !== CONNECT_PATH || (!tokenAllowed && !localTuiAllowed)
+      || authority === undefined) {
       this.writeUnauthorized(req, res)
       return
     }

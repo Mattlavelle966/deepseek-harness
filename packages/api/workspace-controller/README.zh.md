@@ -72,3 +72,5 @@ Documents 查询占用注册表变更队列，因此其他 Workspace 变更（�
 无。
 
 </details>
+
+`./client` 导出在 Node 中选择独立 ESM 客户端，在浏览器中保留现有的加载器工厂产物。

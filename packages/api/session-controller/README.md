@@ -135,3 +135,5 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 None.
 
 </details>
+
+The `./client` export selects a standalone ESM client in Node and retains the existing loader-factory artifact in browsers.

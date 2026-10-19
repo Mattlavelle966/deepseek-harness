@@ -75,6 +75,16 @@ describe('client bundle build faces', () => {
     expect(() => staticLinked(root, ['lib/types/index.js'])).toThrow(/declares no string package name/)
   })
 
+  it('adds a Node client without renaming the existing browser artifact', () => {
+    const configs = clientBundle(packageDir('api/remotes'), ['lib/types/index.js'], { nodeClient: true, hostPhase: true })(
+      { env: { DSH_BUILD_FACE: 'client' } },
+    )
+    expect(configs.find(config => config.name?.endsWith('/client-node'))?.outputOptions)
+      .toMatchObject({ entryFileNames: 'client.node.js' })
+    expect(configs.find(config => config.platform === 'browser')?.outputOptions)
+      .toMatchObject({ entryFileNames: 'client.js' })
+  })
+
   it('opts shared Clients into independent Node ESM and browser factory entries', () => {
     for (const dir of ['client/connection', 'api/gateway', 'typert/registry']) {
       const configs = clientBundle(packageDir(dir), ['lib/types/index.js'], { dualClient: true })(

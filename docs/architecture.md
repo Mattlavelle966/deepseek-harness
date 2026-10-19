@@ -2,7 +2,7 @@
 
 English | [中文](architecture.zh.md)
 
-Read this before changing anything under `packages/`. It assumes you know Cordis; if you do not, start with the [primer](cordis-primer.md) or the [tutorial](cordis-tutorial/index.md).
+Read this before changing `packages/`. Start with the [primer](cordis-primer.md) or [tutorial](cordis-tutorial/index.md) if you are new to Cordis.
 
 ## Cordis
 
@@ -14,7 +14,7 @@ There is no privileged core to patch: you extend dsh by mounting a plugin beside
 
 A running `dsh` is a plugin tree composed at boot from ordered layers.
 
-A **profile** is a named composition stored in the Harness home. It lists the bundles it stacks, holds any out-of-tree plugins it installs, and keeps the user's own `cordis.patch.yml`. `web`, `headless`, `sdk`, `sdk-minimal`, and `acp` ship as templates.
+A **profile** is a named composition stored in the Harness home. It lists the bundles it stacks, holds any out-of-tree plugins it installs, and keeps the user's own `cordis.patch.yml`. `web`, `headless`, `sdk`, `sdk-minimal`, `acp`, and `tui` ship as templates. The [TUI](../apps/tui/README.md) attaches to an existing Web harness without `dsh-base`.
 
 A **bundle** is a distribution format for Cordis config rows and the code they mount, so whatever it inserts stays patchable by the layers above it.
 
@@ -40,7 +40,7 @@ Composition mechanics are in [app-boot](../packages/boot/app-boot/README.md#prof
 
 ## Application launch
 
-Supported Node applications launch through named `dsh` profiles. The shipped profiles are `web`, `headless`, `sdk`, `sdk-minimal`, and `acp`, selected with `dsh --profile <name>` or `dsh <name>`. `plugin` names the management command; a profile with that name requires `--profile plugin`. The TypeScript SDK resolves its same-version `dsh` dependency and selects `sdk`; custom plugin composition remains a profile plus ordered patch files, not another executable or inline application tree. `sdk-minimal` is a repository-owned standalone bundle behind the same launcher, not a caller-supplied Cordis tree.
+Supported Node applications launch through named `dsh` profiles. The shipped profiles are `web`, `headless`, `sdk`, `sdk-minimal`, `acp`, and `tui`, selected with `dsh --profile <name>` or `dsh <name>`. `plugin` names the management command; a profile with that name requires `--profile plugin`. The TypeScript SDK resolves its same-version `dsh` dependency and selects `sdk`; custom plugin composition remains a profile plus ordered patch files, not another executable or inline application tree. `sdk-minimal` is a repository-owned standalone bundle behind the same launcher, not a caller-supplied Cordis tree.
 
 Vendored CLIs, build-only and test-only executables, direct in-process plugin mounting, and the private browser WebWorker preview are not Harness application launchers. [`verify-application-entrypoints`](../scripts/verify-application-entrypoints.ts) keeps every package bin, executable source, root demo, and the root `start:web` and `dev:web` scripts in an explicit class and rejects a Node application path that bypasses `dsh`.
 

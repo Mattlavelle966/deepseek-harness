@@ -192,3 +192,5 @@ selector 必须是 owner currency 的纯函数。非 null 返回值作为 `match
 无。
 
 </details>
+
+`./client/headless` ESM 导出向终端客户端提供现有会话组装和注册表，不挂载浏览器组件。

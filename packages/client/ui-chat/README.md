@@ -204,3 +204,5 @@ None; Chat presentation does not assemble or mutate provider requests.
 None.
 
 </details>
+
+The `./client/headless` ESM export exposes the existing conversation definitions and Chat target builder for terminal clients without mounting browser components.

@@ -104,3 +104,5 @@ Directory recovery appends user context without replacing the system-prompt pref
 None.
 
 </details>
+
+The `./client` export selects a standalone ESM client in Node and retains the existing loader-factory artifact in browsers.

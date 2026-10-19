@@ -1,0 +1,28 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write apps/tui/README.md
+/terminal-frontend:
+  en: fca344ffa198cc57
+  zh: b84bcad5c5d304bf
+/terminal-frontend/run:
+  en: b2d7f8e22e2fdf79
+  zh: cf732d67ecb5e7ba
+/terminal-frontend/navigation:
+  en: e12304e601571bb1
+  zh: cae90b3f66b618ed
+/terminal-frontend/workflows:
+  en: 10ede651ff9bc998
+  zh: 886d8c87f7dd5f72
+/terminal-frontend/extension-api:
+  en: f6e8629347c6d1cd
+  zh: 2a839f447bf5746e
+/terminal-frontend/model-experience:
+  en: a3732332558f4f91
+  zh: f3225f4aa351b097
+/terminal-frontend/model-experience/kv-cache-effect:
+  en: 01537b18d34e1027
+  zh: b998fbfae7a419dc
+/terminal-frontend/known-limitations-and-deferred-work:
+  en: d83b85e95853633c
+  zh: 736d1f09af292a57

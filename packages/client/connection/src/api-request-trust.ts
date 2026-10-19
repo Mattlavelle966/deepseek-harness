@@ -15,6 +15,18 @@
 import { isLoopbackHostname } from './loopback-hostname.ts'
 import type { ConnectionTrustRequest } from './rpc.ts'
 
+/**
+ * Whether a Node socket peer is an IPv4 or IPv6 loopback address.
+ * @param address - address reported by the accepted socket.
+ * @returns true only for IPv4 127/8 or IPv6 ::1, including IPv4-mapped IPv6.
+ */
+export function isLoopbackAddress(address: string | undefined): boolean {
+  if (address === undefined) return false
+  const normalized = address.toLowerCase().split('%', 1)[0]!
+  if (normalized.startsWith('::ffff:')) return isLoopbackHostname(normalized.slice('::ffff:'.length))
+  return normalized === '::1' || isLoopbackHostname(normalized)
+}
+
 function header(headers: ConnectionTrustRequest['headers'], name: string): string | undefined {
   if (headers instanceof Headers) return headers.get(name) ?? undefined
   const value = headers[name]

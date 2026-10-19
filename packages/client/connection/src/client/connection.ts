@@ -47,6 +47,8 @@ export type ConnectionState =
 
 /** Connection-generation callbacks owned by API Gateway. */
 export interface ConnectionSinks {
+  /** Frontend-owned diagnostic presentation; omission keeps console output. */
+  onDiagnostic?: (level: 'warn' | 'error', message: string, cause?: unknown) => void
   /** After the generation source reports ready, first connect included. */
   onConnected?: (host: ConnectionHostInfo) => void
   /** State transitions after the initial attempt has an outcome. Equivalent states are deduplicated. */
@@ -193,7 +195,7 @@ export class ConnectionController {
           if (!this.isRunning()) return
           if (retryDelay.signal.aborted) continue
         }
-        console.warn(`[connection] connection lost, retry #${String(attempt)}`)
+        this.report('warn', `[connection] connection lost, retry #${String(attempt)}`)
         this.callSink(() => { this.sinks.onReconnectRequested?.() })
         if (!this.isRunning()) return
       }
@@ -246,7 +248,7 @@ export class ConnectionController {
 
       try {
         const host = await Promise.race([
-          waitForReady(ready, this.config, ac.signal),
+          waitForReady(ready, this.config, ac.signal, (message) => { this.report('warn', message) }),
           sourceLost,
         ])
         if (ac.signal.aborted) throw new Error('generation aborted during readiness handshake')
@@ -274,12 +276,21 @@ export class ConnectionController {
     this.callSink(() => this.sinks.onStateChange?.(state))
   }
 
+  private report(level: 'warn' | 'error', message: string, cause?: unknown): void {
+    if (this.sinks.onDiagnostic) {
+      try { this.sinks.onDiagnostic(level, message, cause); return }
+      catch (error) { console.error('[connection] diagnostic sink threw:', error) }
+    }
+    if (cause === undefined) console[level](message)
+    else console[level](message, cause)
+  }
+
   /** Sink exception isolation: a business-layer throw is logged only, never affecting pump or reconnect semantics. */
   private callSink(fn: () => void): void {
     try {
       fn()
     } catch (error) {
-      console.error('[connection] connection sink threw:', error)
+      this.report('error', '[connection] connection sink threw:', error)
     }
   }
 }
@@ -289,15 +300,16 @@ function waitForReady<T>(
   ready: Promise<T>,
   config: Required<ConnectionRecoveryConfig>,
   signal: AbortSignal,
+  warn: (message: string) => void,
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false
     const warning = setTimeout(() => {
-      console.warn(`[connection] generation is still not ready after ${String(config.generationReadyWarnMs)}ms`)
+      warn(`[connection] generation is still not ready after ${String(config.generationReadyWarnMs)}ms`)
     }, config.generationReadyWarnMs)
     const timeout = setTimeout(() => {
       const error = new Error(`connection generation was not ready within ${String(config.generationReadyTimeoutMs)}ms`)
-      console.warn(`[connection] ${error.message}; cancelling generation`)
+      warn(`[connection] ${error.message}; cancelling generation`)
       finish({ error })
     }, config.generationReadyTimeoutMs)
     const aborted = (): void => {

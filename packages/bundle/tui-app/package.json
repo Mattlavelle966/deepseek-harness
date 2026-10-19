@@ -1,0 +1,44 @@
+{
+  "name": "@deepseek-ai/dsh-tui-app",
+  "version": "0.2.1-rc.2",
+  "description": "Attach-only terminal application profile",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "cordis.patch.yml",
+    "lib/types/**/*.d.ts"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-tui-frontend": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/bundle/tui-app"
+  },
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:~"
+  }
+}
