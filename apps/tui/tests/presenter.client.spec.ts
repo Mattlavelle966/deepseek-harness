@@ -76,6 +76,32 @@ describe('terminal transcript modes', () => {
     expect(output).not.toContain('Checking')
   })
 
+  it('projects common Markdown into readable terminal rows', () => {
+    const values = new Map([
+      ['assistant', {
+        kind: 'assistant-step',
+        visibility: 'visible' as const,
+        data: {
+          status: 'settled',
+          blocks: [{
+            kind: 'text',
+            text: '# Result\n- **fast** output\n> Read [the docs](https://example.test)\n```ts\nconst ok = true\n```',
+          }],
+        },
+      }],
+    ])
+    const output = presentTranscript({
+      order: [...values.keys()],
+      nodes: { get: (key: string) => values.get(key) },
+    }, new Map()).rows.join('\n')
+
+    expect(output).toContain('◆ Result')
+    expect(output).toContain('• fast output')
+    expect(output).toContain('│ Read the docs (https://example.test)')
+    expect(output).toContain('┌─ code · ts\n│ const ok = true\n└─')
+    expect(output).not.toContain('**')
+  })
+
   it('retains the existing structured diagnostic projection in raw mode', () => {
     const output = transcript(snapshot(), new Map(), 'raw').join('\n')
     expect(output).toContain('── turn-process ──')

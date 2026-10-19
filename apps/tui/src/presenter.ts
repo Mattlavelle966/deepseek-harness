@@ -190,8 +190,76 @@ function assistantText(value: unknown): string[] {
   if (!record(value) || !Array.isArray(value.blocks)) return cleanText(value)
   return value.blocks.flatMap((block) => {
     if (!record(block) || block.kind !== 'text' || typeof block.text !== 'string') return []
-    return block.text
+    return terminalMarkdown(block.text)
   })
+}
+
+function terminalMarkdown(text: string): string[] {
+  const rows: string[] = []
+  let fence: string | undefined
+  for (const source of text.split('\n')) {
+    const delimiter = /^\s{0,3}```\s*([^`]*)$/u.exec(source)
+    if (delimiter) {
+      if (fence === undefined) {
+        fence = delimiter[1]?.trim() ?? ''
+        rows.push(fence === '' ? `┌─ ${t('code')}` : `┌─ ${t('code')} · ${fence}`)
+      } else {
+        rows.push('└─')
+        fence = undefined
+      }
+      continue
+    }
+    if (fence !== undefined) {
+      rows.push(`│ ${source}`)
+      continue
+    }
+    const heading = /^\s{0,3}#{1,6}\s+(.+?)\s*#*$/u.exec(source)
+    if (heading) {
+      rows.push(`◆ ${renderMarkdownInline(heading[1] ?? '')}`)
+      continue
+    }
+    if (/^\s{0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})$/u.test(source)) {
+      rows.push('────────────────')
+      continue
+    }
+    const task = /^(\s*)[-+*]\s+\[([ xX])\]\s+(.+)$/u.exec(source)
+    if (task) {
+      rows.push(`${task[1] ?? ''}${task[2]?.toLowerCase() === 'x' ? '☑' : '☐'} ${renderMarkdownInline(task[3] ?? '')}`)
+      continue
+    }
+    const bullet = /^(\s*)[-+*]\s+(.+)$/u.exec(source)
+    if (bullet) {
+      rows.push(`${bullet[1] ?? ''}• ${renderMarkdownInline(bullet[2] ?? '')}`)
+      continue
+    }
+    const quote = /^(\s*)>\s?(.*)$/u.exec(source)
+    if (quote) {
+      rows.push(`${quote[1] ?? ''}│ ${renderMarkdownInline(quote[2] ?? '')}`)
+      continue
+    }
+    rows.push(renderMarkdownInline(source))
+  }
+  return rows
+}
+
+function renderMarkdownInline(source: string): string {
+  const code: string[] = []
+  const holdCode = (_match: string, value: string): string => {
+    code.push(value)
+    return `\uE000${code.length - 1}\uE001`
+  }
+  return source
+    .replace(/`([^`]+)`/gu, holdCode)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/gu, 'image: $1 ($2)')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/gu, '$1 ($2)')
+    .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gu, '$1')
+    .replace(/\*\*([^*]+)\*\*/gu, '$1')
+    .replace(/__([^_]+)__/gu, '$1')
+    .replace(/~~([^~]+)~~/gu, '$1')
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/gu, '$1')
+    .replace(/(?<!_)_([^_]+)_(?!_)/gu, '$1')
+    .replace(/\\([\\`*{}\[\]()#+\-.!_>])/gu, '$1')
+    .replace(/\uE000(\d+)\uE001/gu, (_match, index: string) => `‹${code[Number(index)] ?? ''}›`)
 }
 
 function assistantRows(value: unknown): string[] | undefined {

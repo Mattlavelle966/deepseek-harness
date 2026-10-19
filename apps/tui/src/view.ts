@@ -55,6 +55,7 @@ interface TranscriptCache {
   rows: string[]
   toolRows: Map<number, string>
 }
+const activityFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const
 
 /** Frontend layout, local drafts, and terminal emulation; owns no backend processes. */
 export class TuiView {
@@ -85,6 +86,7 @@ export class TuiView {
     | { view: TerminalView; emulator: xterm.Terminal; stop: () => void; unsubscribe: () => void; revision: number }
     | undefined
   private frame: ReturnType<typeof setTimeout> | undefined
+  private activityFrame: ReturnType<typeof setTimeout> | undefined
   private interaction: Interaction | undefined
   private interactionIndex = 0
   private interactionDetailScroll = 0
@@ -203,10 +205,12 @@ export class TuiView {
       height = screen.height
     screen.fill({ attr: { color: 'white', bgColor: 'black' }, char: ' ' })
     if (width < 24 || height < 8) {
+      this.scheduleActivityFrame(false)
       this.line(0, 0, t('enlargeThisTmuxPaneMinimum'), width, 'yellow')
       screen.draw({ delta: true })
       return
     }
+    const running = this.model.binding?.session.getSnapshot().running ?? false
     const sessionId = this.model.binding?.sessionId
     const title = sessionId
       ? (this.model.ctx.sessions.list.getSnapshot().byId[sessionId]?.displayTitle ?? sessionId)
@@ -219,6 +223,7 @@ export class TuiView {
     this.composerY = height - composerHeight - 2
     this.chatHeight = Math.max(1, this.composerY - 2)
     const detailWidth = this.showDetail && width >= 110 ? Math.floor((width - this.sideWidth) / 3) : 0
+    this.scheduleActivityFrame(running && this.terminal === undefined && !(this.focus === 'detail' && !detailWidth))
     const contentWidth = width - this.sideWidth - detailWidth - 2
     const navigation = this.navigationRows()
     if (this.sideWidth) {
@@ -247,14 +252,15 @@ export class TuiView {
       this.toolContentRows = new Map()
     } else {
       const conversation = this.conversationRows(contentWidth)
-      this.contentRows = conversation.rows
+      const activity = activityFrames[Math.floor(Date.now() / 100) % activityFrames.length] ?? activityFrames[0]
+      this.contentRows = running ? [...conversation.rows, `── ${activity} ${t('working')} ──`] : conversation.rows
       this.toolContentRows = conversation.toolRows
       const toolAnchor = this.pendingToolAnchor
       if (toolAnchor !== undefined) {
         const header = [...conversation.toolRows].find(([, key]) => key === toolAnchor.key)?.[0]
         if (header !== undefined) {
           const desiredStart = Math.max(0, header - toolAnchor.viewportRow)
-          this.scroll = Math.max(0, conversation.rows.length - this.chatHeight - desiredStart)
+          this.scroll = Math.max(0, this.contentRows.length - this.chatHeight - desiredStart)
         }
         this.pendingToolAnchor = undefined
       }
@@ -270,7 +276,15 @@ export class TuiView {
         y + 2,
         row,
         contentWidth,
-        row.startsWith('──') ? 'cyan' : this.search && row.includes(this.search) ? 'yellow' : 'white',
+        row.startsWith('──') || row.startsWith('┌─') || row.startsWith('└─')
+          ? 'cyan'
+          : row.startsWith('◆ ')
+            ? 'yellow'
+            : row.startsWith('│ ')
+              ? 'gray'
+              : this.search && row.includes(this.search)
+                ? 'yellow'
+                : 'white',
       )
     }
     if (detailWidth) {
@@ -336,6 +350,19 @@ export class TuiView {
       { x, y, attr: { color, bgColor }, wrap: false, dx: 1, dy: 0 },
       termkit.truncateString(safeText(text), Math.max(0, width)),
     )
+  }
+
+  private scheduleActivityFrame(running: boolean): void {
+    if (!running) {
+      if (this.activityFrame !== undefined) clearTimeout(this.activityFrame)
+      this.activityFrame = undefined
+      return
+    }
+    if (this.activityFrame !== undefined) return
+    this.activityFrame = setTimeout(() => {
+      this.activityFrame = undefined
+      this.invalidate()
+    }, 100)
   }
 
   private conversationRows(width: number): Pick<TranscriptCache, 'rows' | 'toolRows'> {
@@ -1542,6 +1569,7 @@ export class TuiView {
     this.lifetime.abort()
     this.model.cancelObservation()
     if (this.frame) clearTimeout(this.frame)
+    if (this.activityFrame) clearTimeout(this.activityFrame)
     this.detachTerminal()
     this.model.changed.delete(this.invalidate)
     for (const dispose of this.actionDisposers) dispose()

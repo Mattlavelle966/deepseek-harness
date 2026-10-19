@@ -49,6 +49,8 @@ const en = {
   requestCancelled: 'Request cancelled',
   reasoning: '[reasoning]\n{0}',
   thinking: 'Thinking',
+  working: 'Working',
+  code: 'code',
   useAnHTTPHarnessURL: 'Use an HTTP harness URL.',
   useALocalhostHarnessURLOrAn: 'Use a localhost harness URL or an SSH port forward.',
   supplyTheLaunchTokenSeparatelyWithDSH: 'The TUI accepts only a local Harness URL.',
