@@ -1,97 +1,11 @@
-── user ──
+── You ──
 Begin your reply with the plain sentence "Reading the workspace now." as text, and in that same message call the bash tool with the command "echo alpha". After the tool result, reply with the single word DONE and stop.
 
-── turn-process ──
-{
-  "turn": 1,
-  "controlAnchorSeq": 14,
-  "processStartSeq": 4,
-  "answerAnchorSeq": 21,
-  "answerStep": 2,
-  "inlineReasoning": false,
-  "messageCount": 1,
-  "toolCallCount": 1,
-  "subagentCount": 0
-}
-
-── assistant-step ──
-[reasoning]
-The user wants me to begin with "Reading the workspace now." and call bash with "echo alpha" in the same message. Then after the tool result, reply with the single word DONE and stop.
+── Assistant ──
 Reading the workspace now.
-[bash]
-{"command": "echo alpha", "description": "Print alpha to stdout"}
 
-── tool-call ──
-bash
-{"command": "echo alpha", "description": "Print alpha to stdout"}
+── bash · done ──
 alpha
 
-
-── assistant-step ──
+── Assistant ──
 DONE
-
-── turn-tail ──
-{
-  "turn": 1,
-  "seq": 23,
-  "time": 1788240495079,
-  "closing": {
-    "status": "settled",
-    "turn": 1,
-    "step": 2,
-    "blocks": [
-      {
-        "kind": "text",
-        "text": "DONE"
-      }
-    ],
-    "time": 1788240495077,
-    "usage": {
-      "inputTokens": 103,
-      "outputTokens": 3,
-      "totalTokens": 7914,
-      "cacheReadTokens": 7808,
-      "reasoningTokens": 0
-    },
-    "finalNode": {
-      "kind": "assistant",
-      "seq": 21,
-      "messageId": "18abfff4-c151-4b6e-807b-9272f1745475",
-      "time": 1788240495077,
-      "turn": 1,
-      "step": 2,
-      "blocks": [
-        {
-          "kind": "text",
-          "text": "DONE"
-        }
-      ],
-      "usage": {
-        "inputTokens": 103,
-        "outputTokens": 3,
-        "totalTokens": 7914,
-        "cacheReadTokens": 7808,
-        "reasoningTokens": 0
-      },
-      "timing": {
-        "stepStartTime": 1788240495069,
-        "firstTokenTime": null,
-        "completedTime": 1788240495077
-      }
-    }
-  },
-  "branchUnavailable": false,
-  "tokenUsage": {
-    "uncachedInputTokens": 7891,
-    "outputTokens": 112,
-    "totalTokens": 15811,
-    "cacheReadTokens": 7808,
-    "reasoningTokens": 42,
-    "routes": [
-      {
-        "provider": "deepseek-official",
-        "model": "deepseek-v4-flash"
-      }
-    ]
-  }
-}

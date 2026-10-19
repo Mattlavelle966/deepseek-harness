@@ -13,6 +13,7 @@ export type { TuiAction } from './model.ts'
 export { TuiModel } from './model.ts'
 export { ApiTransport, resolveServer } from './transport.ts'
 export { transcript } from './presenter.ts'
+export type { TranscriptMode } from './presenter.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'tui-frontend'

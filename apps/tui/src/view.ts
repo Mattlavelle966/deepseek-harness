@@ -8,17 +8,25 @@ import { basename } from 'node:path'
 import { spawn } from 'node:child_process'
 import xterm from '@xterm/headless'
 import type { TerminalView } from '@deepseek-ai/dsh-api-terminal-controller/client'
+import type { WorkspaceId } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 import { PasteDecoder } from './paste.ts'
 import { DraftEditor } from './editor.ts'
 import { TuiModel, pretty, type TuiAction, type Interaction } from './model.ts'
-import { record, safeText, transcript, wrapText } from './presenter.ts'
+import { sidebarRows, workspaceForSession, type SidebarRow } from './navigation.ts'
+import { record, safeText, transcript, wrapText, type TranscriptMode } from './presenter.ts'
 
 interface MenuItem {
   label: string
   detail?: string | undefined
   run(): void | Promise<void>
+}
+interface Menu {
+  title: string
+  items: MenuItem[]
+  index: number
+  emptyMessage?: string
 }
 interface FormField {
   key: string
@@ -51,8 +59,12 @@ export class TuiView {
   private scroll = 0
   private detailScroll = 0
   private detailRows: string[] = []
-  private sessionIndex = 0
-  private menu: { title: string; items: MenuItem[]; index: number } | undefined
+  private sidebarIndex = 0
+  private sidebarKey: SidebarRow['key'] | undefined
+  private readonly expandedWorkspaces = new Set<WorkspaceId>()
+  private pendingRevealSession: SessionId | undefined
+  private transcriptMode: TranscriptMode = 'clean'
+  private menu: Menu | undefined
   private form: Form | undefined
   private command: ':' | '/' | undefined
   private showHelp = false
@@ -184,7 +196,7 @@ export class TuiView {
       ? (this.model.ctx.sessions.list.getSnapshot().byId[sessionId]?.displayTitle ?? sessionId)
       : t('noSession')
     this.line(0, 0, t('deepseek', [title]), width, 'cyan', 'blue')
-    const status = `${this.mode} · ${this.model.state} · ${this.focus}${this.model.pendingQuestions().length ? ' · :questions' : ''}`
+    const status = `${this.mode} · ${this.model.state} · ${this.focus} · ${this.transcriptMode}${this.model.pendingQuestions().length ? ' · :questions' : ''}`
     this.line(Math.max(0, width - status.length - 2), 0, status, status.length + 1, 'white', 'blue')
     this.sideWidth = width >= 80 ? Math.min(this.sidebarWidth, Math.floor(width / 3)) : 0
     const composerHeight = Math.min(Math.max(4, this.draft.text.split('\n').length + 2), Math.floor(height / 3))
@@ -192,19 +204,21 @@ export class TuiView {
     this.chatHeight = Math.max(1, this.composerY - 2)
     const detailWidth = this.showDetail && width >= 110 ? Math.floor((width - this.sideWidth) / 3) : 0
     const contentWidth = width - this.sideWidth - detailWidth - 2
-    const list = this.model.ctx.sessions.list.getSnapshot()
+    const navigation = this.navigationRows()
     if (this.sideWidth) {
-      this.line(0, 1, t('sessionsNNew'), this.sideWidth, this.focus === 'sessions' ? 'cyan' : 'gray')
-      const top = Math.max(0, this.sessionIndex - (height - 6))
+      this.line(0, 1, t('workspacesNNew'), this.sideWidth, this.focus === 'sessions' ? 'cyan' : 'gray')
+      const top = Math.max(0, this.sidebarIndex - (height - 6))
       for (let row = 0; row < height - 4; row++) {
-        const id = list.ids[top + row]
-        if (!id) break
-        const item = list.byId[id]
-        const selected = top + row === this.sessionIndex
+        const item = navigation[top + row]
+        if (!item) break
+        const selected = top + row === this.sidebarIndex
+        const label = item.kind === 'workspace'
+          ? ` ${item.expanded ? '▾' : '▸'} ${item.title}`
+          : `   ${item.sessionId === sessionId ? '▸' : ' '} ${item.running ? '● ' : ''}${item.title}`
         this.line(
           0,
           row + 2,
-          ` ${id === sessionId ? '▸' : ' '} ${item?.running ? '● ' : ''}${item?.displayTitle ?? id}`,
+          label,
           this.sideWidth - 1,
           selected ? 'black' : 'white',
           selected ? 'cyan' : 'black',
@@ -215,7 +229,7 @@ export class TuiView {
     const rows =
       this.focus === 'detail' && !detailWidth
         ? this.model.result.split('\n')
-        : transcript(this.model.chat(), this.model.renderers)
+        : transcript(this.model.chat(), this.model.renderers, this.transcriptMode)
     if (rows.length === 0) rows.push(t('selectASessionOrPressNTo'), '', t('iWriteActionsSpaceSpacePaletteHelp'))
     this.contentRows = rows.flatMap(row => wrapText(row, contentWidth))
     const start =
@@ -317,6 +331,7 @@ export class TuiView {
     this.menu.index = Math.max(0, Math.min(this.menu.index, items.length - 1))
     this.box(this.menu.title, width, height)
     this.line(2, 3, t('filter', [this.input.text]), width - 4, 'yellow')
+    if (items.length === 0) this.line(2, 5, this.menu.emptyMessage ?? t('noMatchingItems'), width - 4, 'gray')
     const top = Math.max(0, this.menu.index - (height - 9))
     items.slice(top, top + height - 7).forEach((item, index) => {
       this.line(
@@ -558,6 +573,10 @@ export class TuiView {
       this.perform(() => this.execute('new'))
       return
     }
+    if (key === 'r') {
+      this.toggleTranscriptMode()
+      return
+    }
     if (key === 'N') {
       this.find(this.search)
       return
@@ -589,13 +608,11 @@ export class TuiView {
       return
     }
     if (this.focus === 'sessions') {
-      if (key === 'j' || key === 'DOWN')
-        this.sessionIndex = Math.min(this.model.ctx.sessions.list.getSnapshot().ids.length - 1, this.sessionIndex + 1)
-      if (key === 'k' || key === 'UP') this.sessionIndex = Math.max(0, this.sessionIndex - 1)
-      if (key === 'ENTER') {
-        const id = this.model.ctx.sessions.list.getSnapshot().ids[this.sessionIndex]
-        if (id) this.perform(() => this.select(id))
-      }
+      if (key === 'j' || key === 'DOWN') this.moveSidebar(1)
+      else if (key === 'k' || key === 'UP') this.moveSidebar(-1)
+      else if (key === 'h' || key === 'LEFT') this.collapseSidebarRow()
+      else if (key === 'l' || key === 'RIGHT') this.expandSidebarRow()
+      else if (key === 'ENTER') this.activateSidebarRow()
     } else if (this.focus === 'composer') {
       if (key === 'h' || key === 'LEFT') this.draft.move(-1)
       else if (key === 'l' || key === 'RIGHT') this.draft.move(1)
@@ -667,9 +684,16 @@ export class TuiView {
       if (Math.abs(data.x - this.sideWidth) <= 1 && this.sideWidth) this.dragging = true
       else if (data.x < this.sideWidth && this.sideWidth) {
         this.focus = 'sessions'
-        this.sessionIndex = Math.max(0, this.sessionIndex - ((this.screen?.height ?? 0) - 6)) + Math.max(0, data.y - 3)
-        const id = this.model.ctx.sessions.list.getSnapshot().ids[this.sessionIndex]
-        if (id) this.perform(() => this.select(id))
+        const rows = this.navigationRows()
+        if (rows.length === 0) return
+        const top = Math.max(0, this.sidebarIndex - ((this.screen?.height ?? 0) - 6))
+        const index = top + data.y - 3
+        const row = rows[index]
+        if (!row) return
+        this.sidebarIndex = index
+        this.sidebarKey = row.key
+        if (row.kind === 'workspace') this.toggleWorkspace(row.workspaceId)
+        else this.perform(() => this.select(row.sessionId))
       } else if (data.y > this.composerY) {
         this.focus = 'composer'
         this.mode = 'INSERT'
@@ -699,6 +723,77 @@ export class TuiView {
       ? ['sessions', 'chat', 'composer', ...(this.showDetail ? ['detail' as const] : [])]
       : ['chat', 'composer']
     this.focus = seats[(seats.indexOf(this.focus) + direction + seats.length) % seats.length] ?? 'composer'
+  }
+
+  private navigationRows(): SidebarRow[] {
+    const workspaces = this.model.ctx.workspaces.list.getSnapshot()
+    let rows = sidebarRows(
+      workspaces.items,
+      workspaces.archivedSessionIds,
+      this.model.ctx.sessions.list.getSnapshot(),
+      this.expandedWorkspaces,
+    )
+    if (this.pendingRevealSession !== undefined) {
+      const workspace = workspaceForSession(workspaces.items, this.pendingRevealSession)
+      if (workspace !== undefined) {
+        this.expandedWorkspaces.add(workspace.workspaceId)
+        rows = sidebarRows(
+          workspaces.items,
+          workspaces.archivedSessionIds,
+          this.model.ctx.sessions.list.getSnapshot(),
+          this.expandedWorkspaces,
+        )
+        const reveal = rows.findIndex(row => row.kind === 'session' && row.sessionId === this.pendingRevealSession)
+        if (reveal >= 0) {
+          this.sidebarIndex = reveal
+          this.sidebarKey = rows[reveal]?.key
+          this.pendingRevealSession = undefined
+        }
+      }
+    }
+    const stable = this.sidebarKey === undefined ? -1 : rows.findIndex(row => row.key === this.sidebarKey)
+    if (stable >= 0) this.sidebarIndex = stable
+    else this.sidebarIndex = Math.max(0, Math.min(this.sidebarIndex, rows.length - 1))
+    this.sidebarKey = rows[this.sidebarIndex]?.key
+    return rows
+  }
+
+  private moveSidebar(direction: number): void {
+    const rows = this.navigationRows()
+    this.sidebarIndex = Math.max(0, Math.min(rows.length - 1, this.sidebarIndex + direction))
+    this.sidebarKey = rows[this.sidebarIndex]?.key
+  }
+
+  private activateSidebarRow(): void {
+    const row = this.navigationRows()[this.sidebarIndex]
+    if (row?.kind === 'workspace') this.toggleWorkspace(row.workspaceId)
+    else if (row) this.perform(() => this.select(row.sessionId))
+  }
+
+  private collapseSidebarRow(): void {
+    const row = this.navigationRows()[this.sidebarIndex]
+    if (!row) return
+    const workspaceId = row.workspaceId
+    if (row.kind === 'session') this.sidebarKey = `workspace:${workspaceId}`
+    else this.expandedWorkspaces.delete(workspaceId)
+    this.navigationRows()
+  }
+
+  private expandSidebarRow(): void {
+    const row = this.navigationRows()[this.sidebarIndex]
+    if (row?.kind === 'workspace') this.expandedWorkspaces.add(row.workspaceId)
+  }
+
+  private toggleWorkspace(workspaceId: WorkspaceId): void {
+    if (this.expandedWorkspaces.has(workspaceId)) this.expandedWorkspaces.delete(workspaceId)
+    else this.expandedWorkspaces.add(workspaceId)
+    this.sidebarKey = `workspace:${workspaceId}`
+  }
+
+  private toggleTranscriptMode(): void {
+    this.transcriptMode = this.transcriptMode === 'clean' ? 'raw' : 'clean'
+    this.model.message = t('transcriptModeChanged', [this.transcriptMode])
+    this.scroll = 0
   }
 
   private async select(id: SessionId): Promise<void> {
@@ -848,6 +943,7 @@ export class TuiView {
       ['image', t('attachAnImage'), ''],
       ['export', t('exportConversation'), ''],
       ['inspect', t('inspectSession'), ''],
+      ['raw', t('toggleRawTranscript'), t('switchCleanAndRawTranscriptOutput')],
       ['help', t('keyboardHelp'), ''],
       ['reconnect', 'Reconnect', ''],
     ]
@@ -876,14 +972,15 @@ export class TuiView {
         return
       case 'new': {
         if (!arg) {
-          this.prompt(t('workspaceDirectoryOnTheHarnessHost'), async cwd =>
-            this.select(await this.model.ctx.sessions.create({ cwd })),
-          )
+          this.newSessionMenu()
           return
         }
         await this.select(await this.model.ctx.sessions.create({ cwd: arg }))
         return
       }
+      case 'raw':
+        this.toggleTranscriptMode()
+        return
       case 'questions': {
         this.menu = {
           title: t('pendingQuestionsTitle'),
@@ -986,7 +1083,7 @@ export class TuiView {
           this.prompt(t('exportPathOnThisMachine'), value => this.execute(t('export', [value])))
           return
         }
-        await writeFile(arg, transcript(this.model.chat(), this.model.renderers).join('\n'), {
+        await writeFile(arg, transcript(this.model.chat(), this.model.renderers, this.transcriptMode).join('\n'), {
           flag: 'wx',
           mode: 0o600,
         })
@@ -1101,6 +1198,26 @@ export class TuiView {
         throw new Error(t('unknownTUICommandUsePaletteOr', [command]))
       }
     }
+  }
+
+  private newSessionMenu(): void {
+    const workspaces = this.model.ctx.workspaces.list.getSnapshot().items
+    this.menu = {
+      title: t('chooseAWorkspace'),
+      index: 0,
+      emptyMessage: t('noWorkspacesCreateOneWithWorkspaces'),
+      items: workspaces.map(workspace => ({
+        label: workspace.title,
+        detail: workspace.path,
+        run: async () => {
+          this.expandedWorkspaces.add(workspace.workspaceId)
+          const sessionId = await this.model.ctx.sessions.create({ workspaceId: workspace.workspaceId })
+          this.pendingRevealSession = sessionId
+          await this.select(sessionId)
+        },
+      })),
+    }
+    this.input.reset()
   }
 
   private async attach(path: string, image: boolean): Promise<void> {

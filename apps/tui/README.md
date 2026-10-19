@@ -20,17 +20,21 @@ For a source checkout, run `pnpm run build:artifacts` before `pnpm dsh tui --url
 
 ## Navigation
 
-The interface starts in Normal mode. `i` or `a` enters the built-in multiline editor; Escape returns to Normal mode. Arrow keys and `hjkl` navigate, `w/b` move by word, `0/$` select line edges, `gg/G` select the beginning/end, and Ctrl-u/Ctrl-d scroll. The editor supports undo/redo, `v` selection, yank/delete, and paste. Bracketed paste remains literal and cannot submit a prompt or run a command.
+The interface starts in Normal mode. The left sidebar contains registered Workspaces and their non-archived Sessions; ungrouped Sessions are omitted. Workspaces start collapsed and remember their expansion state for this TUI process. With the sidebar focused, Up/Down select visible rows, Left/Right collapse or expand, and Enter toggles a Workspace or opens a Session. Clicking a Workspace toggles it, while clicking a Session opens it.
+
+`i` or `a` enters the built-in multiline editor; Escape returns to Normal mode. Arrow keys and `hjkl` navigate, `w/b` move by word, `0/$` select line edges, `gg/G` select the beginning/end, and Ctrl-u/Ctrl-d scroll. The editor supports undo/redo, `v` selection, yank/delete, and paste. Bracketed paste remains literal and cannot submit a prompt or run a command.
 
 Tab and Shift-Tab cycle focus. Ctrl-w followed by `h/j/k/l` changes panes. Space Space opens the searchable action palette; `:` opens TUI commands, `/` searches the visible transcript, and `?` opens help. Menus use arrows and Enter while typing filters their entries. Forms use Tab between fields and Ctrl-s to submit. Complex structured parameters accept JSON and are validated by the existing generated codecs.
 
-Enter follows the Host-backed busy-state delivery preference; Alt-Enter uses its complement. Ctrl-j inserts a newline. Slash-prefixed prompts invoke harness commands. Drafts and attachment selections are per-session and local to this frontend. Mouse support includes focus, lists, scrolling, pane sizing, and transcript selection; `:copy` sends selected text through the terminal clipboard protocol. Terminal clipboard support depends on the terminal and tmux configuration.
+Pressing `n`, or running bare `:new`, opens a searchable Workspace picker and creates the Session in the selected Workspace. `:new <host directory>` remains available for an explicit path-based Session. Enter follows the Host-backed busy-state delivery preference; Alt-Enter uses its complement. Ctrl-j inserts a newline. Slash-prefixed prompts invoke harness commands. Drafts and attachment selections are per-session and local to this frontend. Mouse support includes focus, lists, scrolling, pane sizing, and transcript selection; `:copy` sends selected text through the terminal clipboard protocol. Terminal clipboard support depends on the terminal and tmux configuration.
+
+The transcript defaults to clean output: user and assistant text, compact tool status, readable tool results, and concise failures. Reasoning, lifecycle records, token accounting, and structural JSON are hidden. Press `r` in Normal mode or run `:raw` to switch between clean and raw diagnostic output for this TUI process.
 
 ## Workflows
 
 | Command | Behavior |
 | --- | --- |
-| `:sessions`, `:new <host directory>`, `:rename <title>` | Browse, create, or rename shared sessions |
+| `:sessions`, `:new [host directory]`, `:rename <title>` | Browse, create in a selected Workspace, create from an explicit path, or rename shared Sessions |
 | `:fork`, `:older`, `:stop`, `:search <text>` | Fork, page history, stop the current turn, or search sessions |
 | `:files` | Browse host workspace files and preview text |
 | `:settings`, `:models`, `:workspaces` | Open actions backed by the existing controllers |
@@ -46,6 +50,7 @@ Enter follows the Host-backed busy-state delivery preference; Alt-Enter uses its
 | `:open <URL>` | Explicitly launch a visual preview in the system viewer |
 | `:questions` | Answer agent questions that remain pending after their foreground wait |
 | `:inspect`, `:result` | Inspect session state or the latest action result |
+| `:raw` | Toggle clean and raw transcript output |
 | `:reconnect`, `:cancelobservation`, `:mouse`, `:q` | Reconnect, stop an action stream, toggle mouse, or disconnect |
 
 Approvals and agent questions appear in both frontends. The first answer wins through the existing gateway, which dismisses the other copy. Escape delegates a request rather than approving it. Free-text and option answers are supported; multi-select answers accept comma-separated option labels.
@@ -56,7 +61,7 @@ Profile overlays configure `frameMs`, `escapeDelayMs`, `connectTimeoutMs`, `maxS
 
 ## Extension API
 
-Plugins inject `tui`, then register `TuiAction` entries through `registerAction()` or renderers through `registerRenderer(kind, renderer)`. Both return exact disposers; plugins register them through `ctx.effect()`. Renderers receive shared Chat data and return text lines. Unknown Chat kinds retain a structured fallback.
+Plugins inject `tui`, then register `TuiAction` entries through `registerAction()` or renderers through `registerRenderer(kind, renderer)`. Both return exact disposers; plugins register them through `ctx.effect()`. Renderers receive shared Chat data and return text lines. Unknown Chat kinds use a concise fallback in clean mode and retain their structured representation in raw mode.
 
 ## Model Experience
 

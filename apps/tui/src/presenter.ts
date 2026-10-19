@@ -6,6 +6,16 @@ import stringWidth from 'string-width'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client/headless'
 import { pretty } from './model.ts'
 
+/** Transcript detail selected by the terminal user. */
+export type TranscriptMode = 'clean' | 'raw'
+
+type TranscriptSnapshot = {
+  readonly order: ChatSnapshot['order']
+  readonly nodes: {
+    get(key: string): { readonly kind: string; readonly visibility: 'visible' | 'hidden'; readonly data: unknown } | undefined
+  }
+}
+
 /** Remove terminal control sequences from untrusted model, file, and tool text. */
 export function safeText(value: string): string {
   return stripAnsi(value)
@@ -82,10 +92,12 @@ export function describe(value: unknown): string {
 /** Build display rows from the existing shared Chat snapshot.
  * @param snapshot - selected shared Chat target.
  * @param renderers - registered extension renderers.
+ * @param mode - readable conversation output or complete diagnostic data.
  * @returns terminal-safe display rows. */
 export function transcript(
-  snapshot: ChatSnapshot | undefined,
+  snapshot: TranscriptSnapshot | undefined,
   renderers: ReadonlyMap<string, (data: unknown) => readonly string[]>,
+  mode: TranscriptMode = 'clean',
 ): string[] {
   if (!snapshot) return []
   const rows: string[] = []
@@ -93,9 +105,110 @@ export function transcript(
     const node = snapshot.nodes.get(key)
     if (!node || node.visibility === 'hidden') continue
     const renderer = renderers.get(node.kind)
-    rows.push(`── ${node.kind} ──`, ...(renderer ? renderer(node.data) : describe(node.data).split('\n')), '')
+    if (renderer) {
+      rows.push(`── ${node.kind} ──`, ...renderer(node.data), '')
+      continue
+    }
+    if (mode === 'raw') {
+      rows.push(`── ${node.kind} ──`, ...describe(node.data).split('\n'), '')
+      continue
+    }
+    const clean = cleanNode(node.kind, node.data)
+    if (clean !== undefined) rows.push(...clean, '')
   }
   return rows.map(safeText)
+}
+
+function cleanNode(kind: string, data: unknown): string[] | undefined {
+  switch (kind) {
+    case 'user':
+    case 'steering':
+      return headed(t('you'), cleanText(data))
+    case 'assistant-step':
+      return headed(t('assistant'), assistantText(data))
+    case 'tool-call':
+      return toolRows(data)
+    case 'turn-error':
+      return headed(t('errorLabel'), compactMessage(data, t('turnFailed')))
+    case 'turn-max-tokens':
+      return headed(t('notice'), compactMessage(data, t('maximumTokensReached')))
+    case 'model-retry':
+      return headed(t('notice'), compactMessage(data, t('modelRequestRetrying')))
+    case 'compaction':
+    case 'manual-compaction':
+      return [`── ${t('contextCompacted')} ──`]
+    case 'command':
+      return headed(t('command'), compactMessage(data, t('commandCompleted')))
+    case 'unknown':
+      return headed(t('notice'), compactMessage(data, t('unrecognizedConversationEvent')))
+    case 'context':
+    case 'system-prompt':
+    case 'turn-process':
+    case 'turn-tail':
+    case 'turn-trigger':
+      return undefined
+    default:
+      return headed(kind, compactMessage(data, `[${kind}]`))
+  }
+}
+
+function headed(label: string, lines: readonly string[]): string[] | undefined {
+  const visible = lines.flatMap(line => line.split('\n')).filter(line => line.trim() !== '')
+  return visible.length === 0 ? undefined : [`── ${label} ──`, ...visible]
+}
+
+function assistantText(value: unknown): string[] {
+  if (!record(value) || !Array.isArray(value.blocks)) return cleanText(value)
+  return value.blocks.flatMap((block) => {
+    if (!record(block) || block.kind !== 'text' || typeof block.text !== 'string') return []
+    return block.text
+  })
+}
+
+function cleanText(value: unknown): string[] {
+  if (typeof value === 'string') return [value]
+  if (Array.isArray(value)) return value.flatMap(cleanText)
+  if (!record(value)) return []
+  if (typeof value.text === 'string') return [value.text]
+  if (Array.isArray(value.content)) return value.content.flatMap(cleanText)
+  if (Array.isArray(value.blocks)) return value.blocks.flatMap(cleanText)
+  return []
+}
+
+function compactMessage(value: unknown, fallback: string): string[] {
+  if (!record(value)) return [fallback]
+  for (const field of ['message', 'summary', 'reason', 'title', 'text'] as const) {
+    const candidate = value[field]
+    if (typeof candidate === 'string' && candidate.trim() !== '') return [candidate]
+  }
+  if (record(value.current)) return compactMessage(value.current, fallback)
+  if (record(value.command)) return compactMessage(value.command, fallback)
+  return [fallback]
+}
+
+function toolRows(value: unknown): string[] | undefined {
+  if (!record(value) || !record(value.root)) return headed(t('tool'), [t('toolActivity')])
+  return toolBlockRows(value.root, 0)
+}
+
+function toolBlockRows(value: Record<string, unknown>, depth: number): string[] {
+  const name = typeof value.name === 'string' && value.name !== '' ? value.name : t('tool')
+  const settled = value.kind === 'tool-result'
+  const status = settled ? (value.isError === true ? t('failed') : t('done')) : t('running')
+  const indent = '  '.repeat(depth)
+  const rows = [`${indent}── ${name} · ${status} ──`]
+  if (settled && Array.isArray(value.content)) {
+    const output = value.content.flatMap(cleanText).flatMap(line => line.split('\n'))
+    while (output.at(-1)?.trim() === '') output.pop()
+    rows.push(...output.map(line => `${indent}${line}`))
+  }
+  if (settled && value.isError === true && rows.length === 1) {
+    rows.push(`${indent}${compactMessage(value.error, t('toolFailed'))[0]}`)
+  }
+  if (Array.isArray(value.subCalls)) {
+    for (const child of value.subCalls) if (record(child)) rows.push(...toolBlockRows(child, depth + 1))
+  }
+  return rows
 }
 
 /** Narrow structured fallback data without trusting wire or extension values. */
