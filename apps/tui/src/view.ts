@@ -108,6 +108,7 @@ export class TuiView {
   private chatHeight = 0
   private composerY = 0
   private sidebarWidth = 28
+  private workspaceTreeVisible = true
   private dragging = false
   private selectedText = ''
   private selectionStart: number | undefined
@@ -233,7 +234,9 @@ export class TuiView {
     this.line(0, 0, t('deepseek', [title]), width, 'cyan', 'blue')
     const status = `${this.mode} · ${this.model.state} · ${this.focus} · ${this.transcriptMode}${this.model.pendingQuestions().length ? ' · :questions' : ''}`
     this.line(Math.max(0, width - status.length - 2), 0, status, status.length + 1, 'white', 'blue')
-    this.sideWidth = width >= 80 ? Math.min(this.sidebarWidth, Math.floor(width / 3)) : 0
+    this.sideWidth = this.workspaceTreeVisible && width >= 80
+      ? Math.min(this.sidebarWidth, Math.floor(width / 3))
+      : 0
     const composerHeight = Math.min(Math.max(4, this.draft.text.split('\n').length + 2), Math.floor(height / 3))
     this.composerY = height - composerHeight - 2
     this.chatHeight = Math.max(1, this.composerY - 2)
@@ -760,6 +763,12 @@ export class TuiView {
     }
     if (key === '?') {
       this.showHelp = true
+      return
+    }
+    if (this.prefix === 'space' && (key === 'e' || key === 'E')) {
+      this.workspaceTreeVisible = !this.workspaceTreeVisible
+      if (!this.workspaceTreeVisible && this.focus === 'sessions') this.focus = 'chat'
+      this.prefix = ''
       return
     }
     if (key === ' ') {
