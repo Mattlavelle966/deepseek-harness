@@ -65,14 +65,15 @@ describe('terminal transcript modes', () => {
     expect(expandedOutput).toContain('── ▾ bash · done ──\n/workspace')
   })
 
-  it('shows the latest 20 graphemes while reasoning is streaming', () => {
+  it('shows the latest 100 graphemes while reasoning is streaming', () => {
+    const latest = '界'.repeat(100)
     const values = new Map([
       ['assistant', {
         kind: 'assistant-step',
         visibility: 'visible' as const,
         data: {
           status: 'running',
-          blocks: [{ kind: 'reasoning', text: '**Checking** the workspace files carefully now' }],
+          blocks: [{ kind: 'reasoning', text: `older reasoning ${latest}` }],
         },
       }],
     ])
@@ -81,8 +82,8 @@ describe('terminal transcript modes', () => {
       nodes: { get: (key: string) => values.get(key) },
     }, new Map()).rows.join('\n')
 
-    expect(output).toContain('── Thinking · … files carefully now ──')
-    expect(output).not.toContain('Checking')
+    expect(output).toContain(`── Thinking · …${latest} ──`)
+    expect(output).not.toContain('older reasoning')
   })
 
   it('projects common Markdown into readable terminal rows', () => {

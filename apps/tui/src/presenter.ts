@@ -18,7 +18,7 @@ export interface TranscriptPresentation {
 }
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
-const reasoningPreviewLength = 20
+const reasoningPreviewLength = 100
 
 type TranscriptSnapshot = {
   readonly order: ChatSnapshot['order']
