@@ -47,6 +47,25 @@ export interface Interaction {
   delegate(): void
 }
 
+/** Whole-session figures served by the same projections as the Web composer. */
+export interface SessionMetrics {
+  readonly turns?: number
+  readonly steps?: number
+  readonly totalTokens?: number
+  readonly cacheReadTokens?: number
+  readonly billedInputTokens?: number
+  readonly outputTokens?: number
+  readonly contextTokens?: number
+  readonly contextWindow?: number
+}
+
+/** One recorded workspace-change announcement in the currently loaded event window. */
+export interface ChangeAnnouncement {
+  readonly sessionId: SessionId
+  readonly turn: number
+  readonly seq: number
+}
+
 type ApprovalListener = TypertClientEventListener<'approval/request'>
 const DELEGATE_QUESTION = Symbol('delegate-question')
 
@@ -88,6 +107,10 @@ export class TuiModel {
   private subscription: (() => void) | undefined
   private questionSubscription: (() => void) | undefined
   private conversationSubscription: (() => void) | undefined
+  private projectionSubscriptions: Array<() => void> = []
+  private changeAnnouncementRevision = -1
+  private changeAnnouncementSession: SessionId | undefined
+  private changeAnnouncementCache: ReadonlyMap<number, ChangeAnnouncement> = new Map()
   private interactionId = 0
   private readonly operations = new Set<AbortController>()
 
@@ -202,6 +225,8 @@ export class TuiModel {
       this.questionSubscription?.()
       this.subscription?.()
       this.conversationSubscription?.()
+      for (const stop of this.projectionSubscriptions) stop()
+      this.projectionSubscriptions = []
       this.reference?.release()
       this.reference = reference
       this.binding = binding
@@ -214,6 +239,11 @@ export class TuiModel {
       this.questionSubscription = binding.session.projections.faceOf('userQuestions').subscribe(() => {
         this.notify()
       })
+      this.projectionSubscriptions = ['sessionStats', 'tokenUsage', 'contextPressure'].map(key =>
+        binding.session.projections.faceOf(key).subscribe(() => {
+          this.notify()
+        }),
+      )
       this.conversationSubscription = this.conversation.snapshot.subscribe(() => {
         this.chatRevision++
         this.notify()
@@ -229,6 +259,71 @@ export class TuiModel {
    * @returns the selected Chat projection, when one is retained. */
   chat(): ChatSnapshot | undefined {
     return this.conversation?.target('chat').getSnapshot()
+  }
+
+  /** Read durable usage and context projections without recomputing paged history. */
+  sessionMetrics(): SessionMetrics {
+    const projections = this.binding?.session.projections
+    if (projections === undefined) return {}
+    const stats = objectValue(projections.faceOf('sessionStats').getSnapshot())
+    const usage = objectValue(projections.faceOf('tokenUsage').getSnapshot())
+    const pressure = objectValue(projections.faceOf('contextPressure').getSnapshot())
+    let turns = numberValue(stats?.turns)
+    let steps = numberValue(stats?.steps)
+    if (turns === undefined || steps === undefined) {
+      const windowTurns = new Set<number>()
+      let windowSteps = 0
+      for (const node of this.chat()?.legacy.nodes ?? []) {
+        if (node.kind !== 'assistant') continue
+        windowTurns.add(node.turn)
+        windowSteps += 1
+      }
+      turns ??= windowTurns.size
+      steps ??= windowSteps
+    }
+    const uncached = numberValue(usage?.uncachedInputTokens)
+    const cacheRead = numberValue(usage?.cacheReadTokens)
+    const cacheWrite = numberValue(usage?.cacheWriteTokens)
+    const output = numberValue(usage?.outputTokens)
+    const contextTokens = numberValue(pressure?.projectedTokens) ?? numberValue(pressure?.pressureTokens)
+    const contextWindow = numberValue(pressure?.contextWindow)
+    const billedInput = uncached === undefined || cacheRead === undefined || cacheWrite === undefined
+      ? undefined
+      : uncached + cacheRead + cacheWrite
+    return {
+      turns,
+      steps,
+      ...billedInput === undefined || output === undefined ? {} : { totalTokens: billedInput + output },
+      ...cacheRead === undefined ? {} : { cacheReadTokens: cacheRead },
+      ...billedInput === undefined ? {} : { billedInputTokens: billedInput },
+      ...output === undefined ? {} : { outputTokens: output },
+      ...contextTokens === undefined ? {} : { contextTokens },
+      ...contextWindow === undefined ? {} : { contextWindow },
+    }
+  }
+
+  /** Find the latest recorded change summary for each loaded turn. */
+  changeAnnouncements(): ReadonlyMap<number, ChangeAnnouncement> {
+    const binding = this.binding
+    if (binding === undefined) return new Map()
+    const window = binding.eventSource.getSnapshot()
+    if (this.changeAnnouncementSession === binding.sessionId && this.changeAnnouncementRevision === window.revision) {
+      return this.changeAnnouncementCache
+    }
+    const announcements = new Map<number, ChangeAnnouncement>()
+    for (const entry of window.entries) {
+      const event = objectValue(entry.event)
+      if (event?.type !== 'workspace/changes') continue
+      const data = objectValue(event.data)
+      const turn = numberValue(data?.turn)
+      const seq = numberValue(event.seq)
+      if (turn === undefined || seq === undefined) continue
+      announcements.set(turn, { sessionId: binding.sessionId, turn, seq })
+    }
+    this.changeAnnouncementSession = binding.sessionId
+    this.changeAnnouncementRevision = window.revision
+    this.changeAnnouncementCache = announcements
+    return this.changeAnnouncementCache
   }
 
   /** Resolve the same busy-Enter preference used by the Web composer.
@@ -389,6 +484,8 @@ export class TuiModel {
     this.questionSubscription?.()
     this.subscription?.()
     this.conversationSubscription?.()
+    for (const stop of this.projectionSubscriptions) stop()
+    this.projectionSubscriptions = []
     this.reference?.release()
     await this.ctx.fiber.dispose()
     this.transport.dispose()
@@ -623,6 +720,16 @@ export function pretty(value: unknown): string {
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
   return typeof value === 'object' && value !== null && Symbol.asyncIterator in value
+}
+
+function objectValue(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
 }
 
 declare module '@deepseek-ai/dsh-api-session-controller/client' {

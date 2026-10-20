@@ -9,3 +9,5 @@ alpha
 
 ── Assistant ──
 DONE
+
+── Turn 1 · 15,811 tokens · 49.7% cache · in 7,891 · read 7,808 · out 112 · reasoning 42 ──

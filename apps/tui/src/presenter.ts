@@ -4,7 +4,8 @@ import { t } from './copy.ts'
 import stripAnsi from 'strip-ansi'
 import stringWidth from 'string-width'
 import type { ChatSnapshot } from '@deepseek-ai/dsh-client-ui-chat/client/headless'
-import { pretty } from './model.ts'
+import { pretty, type SessionMetrics } from './model.ts'
+import type { ChangesDiffState, TurnChangesPresentation } from './changes.ts'
 
 /** Transcript detail selected by the terminal user. */
 export type TranscriptMode = 'clean' | 'raw'
@@ -13,6 +14,7 @@ export type TranscriptMode = 'clean' | 'raw'
 export interface TranscriptPresentation {
   readonly rows: string[]
   readonly toolRows: ReadonlyMap<number, string>
+  readonly changeRows: ReadonlyMap<number, string>
 }
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
@@ -122,10 +124,12 @@ export function presentTranscript(
   renderers: ReadonlyMap<string, (data: unknown) => readonly string[]>,
   mode: TranscriptMode = 'clean',
   expandedTools: ReadonlySet<string> | true = new Set(),
+  turnChanges: ReadonlyMap<number, TurnChangesPresentation> = new Map(),
 ): TranscriptPresentation {
-  if (!snapshot) return { rows: [], toolRows: new Map() }
+  if (!snapshot) return { rows: [], toolRows: new Map(), changeRows: new Map() }
   const rows: string[] = []
   const collapsibleRows = new Map<number, string>()
+  const changeRows = new Map<number, string>()
   for (const key of snapshot.order) {
     const node = snapshot.nodes.get(key)
     if (!node || node.visibility === 'hidden') continue
@@ -139,13 +143,24 @@ export function presentTranscript(
       continue
     }
     const expanded = expandedTools === true || expandedTools.has(key)
+    if (node.kind === 'turn-tail') {
+      const turn = record(node.data) && typeof node.data.turn === 'number' ? node.data.turn : undefined
+      const changes = turn === undefined ? undefined : turnChanges.get(turn)
+      const tail = turnTailRows(node.data, changes, expandedTools !== true)
+      if (tail.rows.length > 0) {
+        if (tail.changeRow !== undefined && changes !== undefined)
+          changeRows.set(rows.length + tail.changeRow, changes.key)
+        rows.push(...tail.rows, '')
+      }
+      continue
+    }
     const clean = cleanNode(node.kind, node.data, expanded, expandedTools !== true)
     if (clean !== undefined) {
       if (node.kind === 'tool-call') collapsibleRows.set(rows.length, key)
       rows.push(...clean, '')
     }
   }
-  return { rows: rows.map(safeText), toolRows: collapsibleRows }
+  return { rows: rows.map(safeText), toolRows: collapsibleRows, changeRows }
 }
 
 function cleanNode(kind: string, data: unknown, expanded: boolean, interactive: boolean): string[] | undefined {
@@ -173,12 +188,123 @@ function cleanNode(kind: string, data: unknown, expanded: boolean, interactive: 
     case 'context':
     case 'system-prompt':
     case 'turn-process':
-    case 'turn-tail':
     case 'turn-trigger':
       return undefined
     default:
       return headed(kind, compactMessage(data, `[${kind}]`))
   }
+}
+
+/** Compact whole-session figures for the persistent line above the transcript. */
+export function sessionMetricsLine(metrics: SessionMetrics): string {
+  const parts: string[] = []
+  if (metrics.turns !== undefined && metrics.steps !== undefined)
+    parts.push(t('sessionCounts', [metrics.turns, metrics.steps]))
+  if (metrics.totalTokens !== undefined) parts.push(t('tokens', [compactCount(metrics.totalTokens)]))
+  const cache = cachePercent(metrics.cacheReadTokens, metrics.billedInputTokens)
+  if (cache !== undefined) parts.push(t('cache', [cache]))
+  if (metrics.outputTokens !== undefined) parts.push(t('outputTokens', [compactCount(metrics.outputTokens)]))
+  if (metrics.contextTokens !== undefined && metrics.contextWindow !== undefined && metrics.contextWindow > 0) {
+    parts.push(t('contextPercent', [Math.min(100, Math.round(metrics.contextTokens / metrics.contextWindow * 100))]))
+  }
+  return parts.join(' · ')
+}
+
+function turnTailRows(
+  value: unknown,
+  changes: TurnChangesPresentation | undefined,
+  interactive: boolean,
+): { rows: string[]; changeRow?: number } {
+  const rows: string[] = []
+  if (record(value) && typeof value.turn === 'number' && record(value.tokenUsage)) {
+    const usage = value.tokenUsage
+    const details = [t('turn', [value.turn])]
+    const total = numeric(usage.totalTokens)
+    const output = numeric(usage.outputTokens)
+    if (total !== undefined) details.push(t('tokens', [exactCount(total)]))
+    const cache = cachePercent(numeric(usage.cacheReadTokens), total === undefined || output === undefined
+      ? undefined
+      : total - output)
+    if (cache !== undefined) details.push(t('cache', [cache]))
+    const input = numeric(usage.uncachedInputTokens)
+    if (input !== undefined) details.push(t('inputTokens', [exactCount(input)]))
+    const read = numeric(usage.cacheReadTokens)
+    if (read !== undefined) details.push(t('cacheReadTokens', [exactCount(read)]))
+    const write = numeric(usage.cacheWriteTokens)
+    if (write !== undefined) details.push(t('cacheWriteTokens', [exactCount(write)]))
+    if (output !== undefined) details.push(t('outputTokens', [exactCount(output)]))
+    const reasoning = numeric(usage.reasoningTokens)
+    if (reasoning !== undefined) details.push(t('reasoningTokens', [exactCount(reasoning)]))
+    rows.push(`── ${details.join(' · ')} ──`)
+  }
+  if (changes === undefined || changes.summary === 'missing' || changes.summary === 'loading'
+    || changes.summary.files.length === 0) return { rows }
+  const changeRow = rows.length
+  const disclosure = interactive ? `${changes.expanded ? '▾' : '▸'} ` : ''
+  const files = changes.summary.total === 1 ? t('oneFileChanged') : t('filesChanged', [changes.summary.total])
+  rows.push(`── ${disclosure}${t('gitDiff')} · ${files} · +${exactCount(changes.summary.added)} −${exactCount(changes.summary.deleted)} ──`)
+  if (changes.expanded) rows.push(...expandedDiffRows(changes))
+  return { rows, changeRow }
+}
+
+const maximumDiffLines = 2_000
+
+function expandedDiffRows(changes: TurnChangesPresentation): string[] {
+  if (typeof changes.summary === 'string') return []
+  const rows: string[] = []
+  let remaining = maximumDiffLines
+  changes.summary.files.forEach((file, index) => {
+    rows.push(`┌─ ${file.display} · +${exactCount(file.added)} −${exactCount(file.deleted)}`)
+    const state = changes.diffs.get(index)
+    const diffRows = fileDiffRows(state)
+    const visible = diffRows.slice(0, remaining)
+    rows.push(...visible)
+    remaining -= visible.length
+  })
+  if (changes.summary.total > changes.summary.files.length) {
+    rows.push(t('moreChangedFiles', [changes.summary.total - changes.summary.files.length]))
+  }
+  if (remaining === 0) rows.push(t('diffTruncated', [maximumDiffLines]))
+  rows.push('└─')
+  return rows
+}
+
+function fileDiffRows(state: ChangesDiffState | undefined): string[] {
+  if (state === undefined || state === 'loading') return [t('diffLoading')]
+  if (state === 'missing' || state === 'error') return [t('diffUnavailable')]
+  if (state.kind === 'binary') return [t('binaryDiff')]
+  if (state.kind === 'oversized') return [t('oversizedDiff')]
+  const rows: string[] = []
+  if (state.coarse) rows.push(t('coarseDiff'))
+  if (state.hunks.length === 0) return [...rows, t('unchangedDiff')]
+  for (const hunk of state.hunks) {
+    rows.push(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`)
+    rows.push(...hunk.lines)
+  }
+  return rows
+}
+
+function numeric(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined
+}
+
+function exactCount(value: number): string {
+  return Math.round(value).toLocaleString('en-US')
+}
+
+function compactCount(value: number): string {
+  const scaled = (candidate: number): string => candidate >= 100
+    ? String(Math.round(candidate))
+    : String(Math.round(candidate * 10) / 10)
+  if (value < 1_000) return String(Math.round(value))
+  if (value < 1_000_000) return `${scaled(value / 1_000)}K`
+  return `${scaled(value / 1_000_000)}M`
+}
+
+function cachePercent(read: number | undefined, input: number | undefined): string | undefined {
+  if (read === undefined || input === undefined || input <= 0) return undefined
+  if (read >= input) return '100'
+  return String(Math.min(99.9, Math.round(read / input * 1_000) / 10))
 }
 
 function headed(label: string, lines: readonly string[]): string[] | undefined {

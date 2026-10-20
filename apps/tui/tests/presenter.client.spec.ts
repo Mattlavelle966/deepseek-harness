@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { presentTranscript, transcript } from '../src/presenter.ts'
+import { presentTranscript, sessionMetricsLine, transcript } from '../src/presenter.ts'
+import type { TurnChangesPresentation } from '../src/changes.ts'
 
 function snapshot() {
   const values = new Map<string, { kind: string; visibility: 'visible'; data: unknown }>([
@@ -26,7 +27,14 @@ function snapshot() {
         subCalls: [],
       } },
     }],
-    ['tail', { kind: 'turn-tail', visibility: 'visible', data: { turn: 1, tokenUsage: { totalTokens: 999 } } }],
+    ['tail', { kind: 'turn-tail', visibility: 'visible', data: { turn: 1, tokenUsage: {
+      totalTokens: 999,
+      uncachedInputTokens: 99,
+      cacheReadTokens: 800,
+      cacheWriteTokens: 0,
+      outputTokens: 100,
+      reasoningTokens: 25,
+    } } }],
   ])
   return {
     order: [...values.keys()],
@@ -42,6 +50,7 @@ describe('terminal transcript modes', () => {
     expect(output).toContain('── bash · done ──\n/workspace')
     expect(output).not.toContain('private reasoning')
     expect(output).not.toContain('argsRaw')
+    expect(output).toContain('── Turn 1 · 999 tokens · 89% cache · in 99 · read 800 · write 0 · out 100 · reasoning 25 ──')
     expect(output).not.toContain('totalTokens')
   })
 
@@ -107,5 +116,46 @@ describe('terminal transcript modes', () => {
     expect(output).toContain('── turn-process ──')
     expect(output).toContain('"toolCallCount": 1')
     expect(output).toContain('"totalTokens": 999')
+  })
+
+  it('shows session usage, cache, output, and context occupancy compactly', () => {
+    expect(sessionMetricsLine({
+      turns: 12,
+      steps: 34,
+      totalTokens: 12_345,
+      cacheReadTokens: 8_000,
+      billedInputTokens: 10_000,
+      outputTokens: 2_345,
+      contextTokens: 32_000,
+      contextWindow: 128_000,
+    })).toBe('12 turns · 34 steps · 12.3K tokens · 80% cache · out 2.3K · 25% context')
+  })
+
+  it('renders recorded changed files as a collapsible inline diff', () => {
+    const changes: TurnChangesPresentation = {
+      key: 'session:40',
+      expanded: true,
+      summary: {
+        turn: 1,
+        total: 1,
+        added: 2,
+        deleted: 1,
+        files: [{ path: 'src/app.ts', display: 'src/app.ts', added: 2, deleted: 1 }],
+      },
+      diffs: new Map([[0, {
+        kind: 'text',
+        path: 'src/app.ts',
+        display: 'src/app.ts',
+        before: true,
+        after: true,
+        coarse: false,
+        hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 2, lines: ['-old', '+new', '+line'] }],
+      }]]),
+    }
+    const output = presentTranscript(snapshot(), new Map(), 'clean', new Set(), new Map([[1, changes]]))
+    expect(output.rows.join('\n')).toContain(
+      '── ▾ Git diff · 1 file · +2 −1 ──\n┌─ src/app.ts · +2 −1\n@@ -1,1 +1,2 @@\n-old\n+new\n+line\n└─',
+    )
+    expect(output.changeRows.get(output.rows.indexOf('── ▾ Git diff · 1 file · +2 −1 ──'))).toBe('session:40')
   })
 })

@@ -15,7 +15,13 @@ import { PasteDecoder } from './paste.ts'
 import { DraftEditor } from './editor.ts'
 import { TuiModel, pretty, type TuiAction, type Interaction } from './model.ts'
 import { sidebarRows, workspaceForSession, type SidebarRow } from './navigation.ts'
-import { presentTranscript, record, safeText, transcript, wrapText, type TranscriptMode } from './presenter.ts'
+import {
+  presentTranscript, record, safeText, sessionMetricsLine, transcript, wrapText, type TranscriptMode,
+} from './presenter.ts'
+import {
+  changesDiffUrl, changesKey, changesSummaryUrl, decodeChangesDiff, decodeChangesSummary,
+  type ChangesDiffState, type ChangesSummaryState, type TurnChangesPresentation,
+} from './changes.ts'
 
 interface MenuItem {
   label: string
@@ -52,8 +58,10 @@ interface TranscriptCache {
   width: number
   mode: TranscriptMode
   expansionRevision: number
+  changesRevision: number
   rows: string[]
   toolRows: Map<number, string>
+  changeRows: Map<number, string>
 }
 const activityFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'] as const
 
@@ -105,9 +113,16 @@ export class TuiView {
   private selectionStart: number | undefined
   private contentRows: string[] = []
   private toolContentRows = new Map<number, string>()
+  private changeContentRows = new Map<number, string>()
   private readonly expandedTools = new Set<string>()
+  private readonly expandedChanges = new Set<string>()
   private toolExpansionRevision = 0
   private pendingToolAnchor: { key: string; viewportRow: number } | undefined
+  private pendingChangeAnchor: { key: string; viewportRow: number } | undefined
+  private readonly changeSummaries = new Map<string, ChangesSummaryState>()
+  private readonly changeDiffs = new Map<string, ChangesDiffState>()
+  private readonly changeCoordinates = new Map<string, { sessionId: SessionId; seq: number }>()
+  private changesRevision = 0
   private transcriptCache: TranscriptCache | undefined
   private search = ''
 
@@ -247,14 +262,17 @@ export class TuiView {
       }
       for (let y = 1; y < height - 1; y++) this.line(this.sideWidth - 1, y, '│', 1, 'gray')
     }
+    this.line(this.sideWidth + 1, 1, sessionMetricsLine(this.model.sessionMetrics()), contentWidth, 'gray')
     if (this.focus === 'detail' && !detailWidth) {
       this.contentRows = this.model.result.split('\n').flatMap(row => wrapText(row, contentWidth))
       this.toolContentRows = new Map()
+      this.changeContentRows = new Map()
     } else {
       const conversation = this.conversationRows(contentWidth)
       const activity = activityFrames[Math.floor(Date.now() / 100) % activityFrames.length] ?? activityFrames[0]
       this.contentRows = running ? [...conversation.rows, `── ${activity} ${t('working')} ──`] : conversation.rows
       this.toolContentRows = conversation.toolRows
+      this.changeContentRows = conversation.changeRows
       const toolAnchor = this.pendingToolAnchor
       if (toolAnchor !== undefined) {
         const header = [...conversation.toolRows].find(([, key]) => key === toolAnchor.key)?.[0]
@@ -263,6 +281,15 @@ export class TuiView {
           this.scroll = Math.max(0, this.contentRows.length - this.chatHeight - desiredStart)
         }
         this.pendingToolAnchor = undefined
+      }
+      const changeAnchor = this.pendingChangeAnchor
+      if (changeAnchor !== undefined) {
+        const header = [...conversation.changeRows].find(([, key]) => key === changeAnchor.key)?.[0]
+        if (header !== undefined) {
+          const desiredStart = Math.max(0, header - changeAnchor.viewportRow)
+          this.scroll = Math.max(0, this.contentRows.length - this.chatHeight - desiredStart)
+        }
+        this.pendingChangeAnchor = undefined
       }
     }
     const start =
@@ -276,15 +303,21 @@ export class TuiView {
         y + 2,
         row,
         contentWidth,
-        row.startsWith('──') || row.startsWith('┌─') || row.startsWith('└─')
-          ? 'cyan'
-          : row.startsWith('◆ ')
-            ? 'yellow'
-            : row.startsWith('│ ')
-              ? 'gray'
-              : this.search && row.includes(this.search)
-                ? 'yellow'
-                : 'white',
+        row.startsWith('+')
+          ? 'green'
+          : row.startsWith('-')
+            ? 'red'
+            : row.startsWith('@@')
+              ? 'yellow'
+              : row.startsWith('──') || row.startsWith('┌─') || row.startsWith('└─')
+                ? 'cyan'
+                : row.startsWith('◆ ')
+                  ? 'yellow'
+                  : row.startsWith('│ ')
+                    ? 'gray'
+                    : this.search && row.includes(this.search)
+                      ? 'yellow'
+                      : 'white',
       )
     }
     if (detailWidth) {
@@ -365,8 +398,9 @@ export class TuiView {
     }, 100)
   }
 
-  private conversationRows(width: number): Pick<TranscriptCache, 'rows' | 'toolRows'> {
+  private conversationRows(width: number): Pick<TranscriptCache, 'rows' | 'toolRows' | 'changeRows'> {
     const snapshot = this.model.chat()
+    const turnChanges = this.turnChanges()
     const rendererEntries = [...this.model.renderers.entries()]
     const cached = this.transcriptCache
     if (
@@ -376,15 +410,21 @@ export class TuiView {
       cached.width === width &&
       cached.mode === this.transcriptMode &&
       cached.expansionRevision === this.toolExpansionRevision &&
+      cached.changesRevision === this.changesRevision &&
       sameRendererEntries(cached.rendererEntries, rendererEntries)
     ) return cached
 
-    const presentation = presentTranscript(snapshot, this.model.renderers, this.transcriptMode, this.expandedTools)
+    const presentation = presentTranscript(
+      snapshot, this.model.renderers, this.transcriptMode, this.expandedTools, turnChanges,
+    )
     const rows: string[] = []
     const toolRows = new Map<number, string>()
+    const changeRows = new Map<number, string>()
     presentation.rows.forEach((row, sourceRow) => {
       const tool = presentation.toolRows.get(sourceRow)
       if (tool !== undefined) toolRows.set(rows.length, tool)
+      const changes = presentation.changeRows.get(sourceRow)
+      if (changes !== undefined) changeRows.set(rows.length, changes)
       rows.push(...wrapText(row, width))
     })
     if (rows.length === 0) rows.push(t('selectASessionOrPressNTo'), '', t('iWriteActionsSpaceSpacePaletteHelp'))
@@ -395,11 +435,85 @@ export class TuiView {
       width,
       mode: this.transcriptMode,
       expansionRevision: this.toolExpansionRevision,
+      changesRevision: this.changesRevision,
       rows,
       toolRows,
+      changeRows,
     }
     this.transcriptCache = next
     return next
+  }
+
+  private turnChanges(): ReadonlyMap<number, TurnChangesPresentation> {
+    const result = new Map<number, TurnChangesPresentation>()
+    for (const announcement of this.model.changeAnnouncements().values()) {
+      const key = changesKey(announcement.sessionId, announcement.seq)
+      this.changeCoordinates.set(key, announcement)
+      if (!this.changeSummaries.has(key)) {
+        this.changeSummaries.set(key, 'loading')
+        void this.loadChangesSummary(key, announcement.sessionId, announcement.seq)
+      }
+      const diffs = new Map<number, ChangesDiffState>()
+      const summary = this.changeSummaries.get(key) ?? 'loading'
+      if (typeof summary !== 'string') {
+        summary.files.forEach((_file, index) => {
+          const state = this.changeDiffs.get(`${key}:${index}`)
+          if (state !== undefined) diffs.set(index, state)
+        })
+      }
+      result.set(announcement.turn, {
+        key,
+        summary,
+        expanded: this.expandedChanges.has(key),
+        diffs,
+      })
+    }
+    return result
+  }
+
+  private async loadChangesSummary(key: string, sessionId: SessionId, seq: number): Promise<void> {
+    try {
+      const response = await this.model.transport.fetch(changesSummaryUrl(sessionId, seq), {
+        signal: this.lifetime.signal,
+      })
+      const decoded = response.ok ? decodeChangesSummary(await response.json() as unknown) : undefined
+      this.changeSummaries.set(key, decoded ?? 'missing')
+      if (decoded !== undefined && this.expandedChanges.has(key)) this.loadChangesDiffs(key, decoded.files.length)
+    } catch {
+      if (!this.lifetime.signal.aborted) this.changeSummaries.set(key, 'missing')
+    }
+    this.changesRevision++
+    this.invalidate()
+  }
+
+  private loadChangesDiffs(key: string, count: number): void {
+    const coordinates = this.changeCoordinates.get(key)
+    if (coordinates === undefined) return
+    for (let index = 0; index < count; index++) {
+      const diffKey = `${key}:${index}`
+      if (this.changeDiffs.has(diffKey)) continue
+      this.changeDiffs.set(diffKey, 'loading')
+      void this.loadChangesDiff(diffKey, coordinates.sessionId, coordinates.seq, index)
+    }
+  }
+
+  private async loadChangesDiff(
+    key: string,
+    sessionId: SessionId,
+    seq: number,
+    index: number,
+  ): Promise<void> {
+    try {
+      const response = await this.model.transport.fetch(changesDiffUrl(sessionId, seq, index), {
+        signal: this.lifetime.signal,
+      })
+      const decoded = response.ok ? decodeChangesDiff(await response.json() as unknown) : undefined
+      this.changeDiffs.set(key, decoded ?? (response.status === 404 ? 'missing' : 'error'))
+    } catch {
+      if (!this.lifetime.signal.aborted) this.changeDiffs.set(key, 'error')
+    }
+    this.changesRevision++
+    this.invalidate()
   }
 
   private box(title: string, width: number, height: number): void {
@@ -497,6 +611,7 @@ export class TuiView {
     this.box(t('keyboardHELP'), width, height)
     const rows = [
       t('normalHjklWBGgGCtrl'),
+      t('chatDTogglesGitDiff'),
       t('editingArrowsHomeEndCtrlJNewline'),
       t('editingEscNormalUUndoCtrlR'),
       t('tabShiftTabFocusCtrlWH'),
@@ -720,8 +835,9 @@ export class TuiView {
       if (key === 'j' || key === 'DOWN') this.detailScroll++
       if (key === 'k' || key === 'UP') this.detailScroll = Math.max(0, this.detailScroll - 1)
     } else {
-      if (key === 'j' || key === 'DOWN') this.scroll = Math.max(0, this.scroll - 1)
-      if (key === 'k' || key === 'UP') this.scroll++
+      if (key === 'd') this.toggleVisibleChanges()
+      else if (key === 'j' || key === 'DOWN') this.scroll = Math.max(0, this.scroll - 1)
+      else if (key === 'k' || key === 'UP') this.scroll++
     }
   }
 
@@ -795,6 +911,13 @@ export class TuiView {
         if (tool !== undefined) {
           this.pendingToolAnchor = { key: tool, viewportRow: Math.max(0, data.y - 3) }
           this.toggleTool(tool)
+          this.invalidate()
+          return
+        }
+        const changes = this.changeContentRows.get(contentRow)
+        if (changes !== undefined) {
+          this.pendingChangeAnchor = { key: changes, viewportRow: Math.max(0, data.y - 3) }
+          this.toggleChanges(changes)
           this.invalidate()
           return
         }
@@ -901,12 +1024,34 @@ export class TuiView {
     this.toolExpansionRevision++
   }
 
+  private toggleChanges(key: string): void {
+    if (this.expandedChanges.has(key)) this.expandedChanges.delete(key)
+    else {
+      this.expandedChanges.add(key)
+      const summary = this.changeSummaries.get(key)
+      if (typeof summary !== 'string' && summary !== undefined) this.loadChangesDiffs(key, summary.files.length)
+    }
+    this.changesRevision++
+  }
+
+  private toggleVisibleChanges(): void {
+    const start = Math.max(0, this.contentRows.length - this.chatHeight - this.scroll)
+    const entries = [...this.changeContentRows]
+    const target = entries.find(([row]) => row >= start && row < start + this.chatHeight) ?? entries.at(-1)
+    if (target === undefined) return
+    const [row, key] = target
+    this.pendingChangeAnchor = { key, viewportRow: Math.max(0, row - start) }
+    this.toggleChanges(key)
+  }
+
   private async select(id: SessionId): Promise<void> {
     this.persistDraft()
     this.detachTerminal()
     await this.model.select(id)
     this.expandedTools.clear()
+    this.expandedChanges.clear()
     this.toolExpansionRevision++
+    this.changesRevision++
     this.draft.reset(this.model.drafts.get(id) ?? '')
     this.scroll = 0
   }
