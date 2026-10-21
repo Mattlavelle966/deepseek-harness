@@ -765,11 +765,18 @@ export class TuiView {
       this.showHelp = true
       return
     }
-    if (this.prefix === 'space' && (key === 'e' || key === 'E')) {
-      this.workspaceTreeVisible = !this.workspaceTreeVisible
-      if (!this.workspaceTreeVisible && this.focus === 'sessions') this.focus = 'chat'
-      this.prefix = ''
-      return
+    if (this.prefix === 'space') {
+      if (key === 'e' || key === 'E') {
+        this.workspaceTreeVisible = !this.workspaceTreeVisible
+        if (!this.workspaceTreeVisible && this.focus === 'sessions') this.focus = 'chat'
+        this.prefix = ''
+        return
+      }
+      if (key === 'w' || key === 'W') {
+        this.prefix = ''
+        this.perform(() => this.workspaceDirectory())
+        return
+      }
     }
     if (key === ' ') {
       if (this.prefix === 'space') {
@@ -1183,6 +1190,7 @@ export class TuiView {
     const entries: Array<[string, string, string]> = [
       ['new', t('newSession'), t('createASharedHarnessSession')],
       ['sessions', t('switchSession'), ''],
+      ['workspace', t('setWorkspace'), t('browseAndRegisterAWorkspace')],
       ['workspaces', t('workspaces'), ''],
       ['stop', t('stopCurrentTurn'), t('queuedMessagesRemain')],
       ['fork', t('forkSession'), ''],
@@ -1239,6 +1247,10 @@ export class TuiView {
         await this.select(await this.model.ctx.sessions.create({ cwd: arg }))
         return
       }
+      case 'workspace':
+        if (arg) await this.setWorkspace(arg, false)
+        else await this.workspaceDirectory()
+        return
       case 'raw':
         this.toggleTranscriptMode()
         return
@@ -1466,19 +1478,67 @@ export class TuiView {
     this.menu = {
       title: t('chooseAWorkspace'),
       index: 0,
-      emptyMessage: t('noWorkspacesCreateOneWithWorkspaces'),
-      items: workspaces.map(workspace => ({
-        label: workspace.title,
-        detail: workspace.path,
-        run: async () => {
-          this.expandedWorkspaces.add(workspace.workspaceId)
-          const sessionId = await this.model.ctx.sessions.create({ workspaceId: workspace.workspaceId })
-          this.pendingRevealSession = sessionId
-          await this.select(sessionId)
+      items: [
+        {
+          label: t('addWorkspace'),
+          detail: t('browseHostDirectories'),
+          run: () => this.workspaceDirectory(undefined, true),
         },
-      })),
+        ...workspaces.map(workspace => ({
+          label: workspace.title,
+          detail: workspace.path,
+          run: async () => {
+            this.expandedWorkspaces.add(workspace.workspaceId)
+            const sessionId = await this.model.ctx.sessions.create({ workspaceId: workspace.workspaceId })
+            this.pendingRevealSession = sessionId
+            await this.select(sessionId)
+          },
+        })),
+      ],
     }
     this.input.reset()
+  }
+
+  private async workspaceDirectory(path?: string, createSession = false): Promise<void> {
+    const result = await this.model.ctx.remote.directoryPicker.list(path, this.lifetime.signal)
+    if (!result.ok) throw new Error(result.error.message)
+    const listing = result.value
+    const parent = listing.crumbs.at(-2)
+    this.menu = {
+      title: t('setWorkspaceTitle', [listing.path]),
+      index: 0,
+      items: [
+        {
+          label: t('useThisDirectory'),
+          detail: listing.path,
+          run: () => this.setWorkspace(listing.path, createSession),
+        },
+        ...(parent === undefined
+          ? []
+          : [{ label: t('parent'), detail: parent.path, run: () => this.workspaceDirectory(parent.path, createSession) }]),
+        ...listing.entries.map(entry => ({
+          label: `\u25b8 ${entry.name}${entry.hidden ? t('hiddenDirectory') : ''}`,
+          detail: entry.path,
+          run: () => this.workspaceDirectory(entry.path, createSession),
+        })),
+      ],
+    }
+    if (listing.truncated) this.model.message = t('directoryListTruncated')
+    this.input.reset()
+  }
+
+  private async setWorkspace(path: string, createSession: boolean): Promise<void> {
+    const workspace = await this.model.ctx.workspaces.create({ path })
+    this.workspaceTreeVisible = true
+    this.expandedWorkspaces.add(workspace.workspaceId)
+    this.sidebarKey = `workspace:${workspace.workspaceId}`
+    this.navigationRows()
+    this.focus = 'sessions'
+    this.model.message = t('workspaceSetTo', [workspace.title])
+    if (!createSession) return
+    const sessionId = await this.model.ctx.sessions.create({ workspaceId: workspace.workspaceId })
+    this.pendingRevealSession = sessionId
+    await this.select(sessionId)
   }
 
   private async attach(path: string, image: boolean): Promise<void> {

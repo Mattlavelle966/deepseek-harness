@@ -93,7 +93,7 @@ const en = {
   prompt: '\u2500 PROMPT {0}{1}',
   paletteSessionsFilesSettingsTerminalStopQ: ' :palette  :sessions  :files  :settings  :terminal  :stop  :q',
   hjklNavigateTabFocusSearchMouseEnabled:
-    ' hjkl navigate \u00b7 Tab focus \u00b7 Space E tree \u00b7 / search \u00b7 mouse enabled where configured',
+    ' hjkl navigate \u00b7 Tab focus \u00b7 Space W workspace \u00b7 Space E tree \u00b7 / search',
   filter: 'Filter: {0}',
   noMatchingItems: 'No matching items.',
   optional: ' (optional)',
@@ -108,10 +108,10 @@ const en = {
   editingArrowsHomeEndCtrlJNewline: 'Editing: arrows, Home/End, Ctrl-j newline, Enter send, Alt-Enter steer',
   editingEscNormalUUndoCtrlR: 'Editing: Esc normal; u undo, Ctrl-r redo, v selection, y/d yank/delete, p paste',
   tabShiftTabFocusCtrlWH:
-    'Tab / Shift-Tab focus; Ctrl-w h/j/k/l move focus; Space Space palette; Space E workspace tree',
+    'Tab / Shift-Tab focus; Ctrl-w h/j/k/l move focus; Space Space palette; Space W set workspace; Space E tree',
   sessionsNewDirectoryRenameTITLEForkOlder: ':sessions :new [directory] :rename TITLE :fork :older :stop :search TEXT :raw',
   filesSettingsModelsPluginsGoalsSchedulesJobs: ':files :settings :models :plugins :goals :schedules :jobs :subagents',
-  workspacesCommandsActionsInspectResultExportPATH: ':workspaces :commands :actions :inspect :result :export PATH',
+  workspacesCommandsActionsInspectResultExportPATH: ':workspace [host directory] :workspaces :commands :actions :inspect :result :export PATH',
   attachPATHImagePATHClearattachmentsDownloadROUTE:
     ':attach PATH :image PATH :clearattachments :download ROUTE PATH :open URL',
   terminalIdTerminalsTermcloseTerminalinputCtrlReturns:
@@ -128,7 +128,15 @@ const en = {
   newSession: 'New session',
   createASharedHarnessSession: 'Create a shared harness session',
   chooseAWorkspace: 'CHOOSE A WORKSPACE',
-  noWorkspacesCreateOneWithWorkspaces: 'No workspaces. Use :workspaces to create one, then press n again.',
+  addWorkspace: '+ Add workspace',
+  browseHostDirectories: 'Browse host directories',
+  setWorkspace: 'Set workspace',
+  browseAndRegisterAWorkspace: 'Browse and register a host directory',
+  setWorkspaceTitle: 'SET WORKSPACE \u00b7 {0}',
+  useThisDirectory: 'Use this directory',
+  hiddenDirectory: ' \u00b7 hidden',
+  directoryListTruncated: 'This directory has more folders than can be shown.',
+  workspaceSetTo: 'Workspace set to {0}',
   switchSession: 'Switch session',
   workspaces: 'Workspaces',
   stopCurrentTurn: 'Stop current turn',
