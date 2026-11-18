@@ -71,3 +71,16 @@ index 7da1c45de8a106a68411cf79bec75f553534a1c7..296d131b59b1cf75f2516c39e85bba72
                  break;
              }
              case "toolcall_end":
+diff --git a/dist/api/simple-options.js b/dist/api/simple-options.js
+index 4e36f350e95fb4743014dcf3c6ab512eab988214..ed656850c75edf83ff8394e4f8bc3c64360f2e01 100644
+--- a/dist/api/simple-options.js
++++ b/dist/api/simple-options.js
+@@ -20,7 +20,7 @@ export function buildBaseOptions(model, context, options, apiKey) {
+     return {
+         temperature: options?.temperature,
+         samplingParams,
+-        maxTokens: clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens),
++        maxTokens: options?.maxTokens ?? clampMaxTokensToContext(model, context, model.maxTokens),
+         signal: options?.signal,
+         telemetryContext: options?.telemetryContext,
+         apiKey: apiKey || options?.apiKey,
